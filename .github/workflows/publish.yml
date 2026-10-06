@@ -9,6 +9,7 @@ on:
       - 'dist/app.js'
       - 'dist/hourly.js'
       - 'dist/axis.js'
+      - 'dist/exports.js'
       - 'dist/style.css'
       - 'dist/favicon.svg'
       - '.github/workflows/publish.yml'

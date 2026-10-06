@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
+import struct
 from pathlib import Path
 from threading import Thread
 
@@ -43,7 +44,16 @@ try:
                 content_type='application/json', body=json.dumps(data)))
             context.grant_permissions(['clipboard-read','clipboard-write'])
             page = context.new_page()
-            page.add_init_script("window.pngText=[];const original=CanvasRenderingContext2D.prototype.fillText;CanvasRenderingContext2D.prototype.fillText=function(value,...args){window.pngText.push(String(value));return original.call(this,value,...args);};")
+            page.add_init_script("""window.pngText=[];window.pngOverflow=[];
+              const original=CanvasRenderingContext2D.prototype.fillText;
+              CanvasRenderingContext2D.prototype.fillText=function(value,x,y,...args){
+                window.pngText.push(String(value));
+                const m=this.measureText(value),s=this.getTransform().a;
+                const left=x-(this.textAlign==='right'?m.width:this.textAlign==='center'?m.width/2:0);
+                if(left < -1 || left+m.width > this.canvas.width/s+1 || y-m.actualBoundingBoxAscent < -1 || y+m.actualBoundingBoxDescent > this.canvas.height/s+1)
+                  window.pngOverflow.push(String(value));
+                return original.call(this,value,x,y,...args);
+              };""")
             errors = []
             page.on('pageerror', lambda error: errors.append(str(error)))
             page.goto(f'http://127.0.0.1:{server.server_port}/', wait_until='networkidle')
@@ -65,12 +75,21 @@ try:
             assert not metrics['overlapping'], metrics
             assert page.locator('.gaps-panel, #gap-list').count() == 0
             assert page.locator('.hero-right #copy-button').count() == 1
-            assert page.locator('.hero-right #png-button').count() == 1
+            assert page.locator('.hero-right [data-image], #png-button').count() == 0
+            assert page.locator('[data-image]').count() == 6
+            assert page.locator('#history-details [data-image]').count() == 0
             refresh_box=page.locator('#refresh-button').bounding_box()
-            for button in ('copy-button','png-button'):
+            for button in ('copy-button',):
                 box=page.locator('#'+button).bounding_box()
                 assert box['y'] >= refresh_box['y']+refresh_box['height'], (button,box,refresh_box)
                 assert box['x'] >= 0 and box['x']+box['width'] <= width
+            image_positions=page.evaluate("""() => [...document.querySelectorAll('[data-image]')].map(button=>{
+                const owner=button.closest('.leader,.overview-bar,.panel'), b=button.getBoundingClientRect(),p=owner.getBoundingClientRect();
+                const labels=owner.matches('.leader')?[...owner.querySelectorAll('.artist-name,.share-value')]:[...owner.querySelectorAll('h2')];
+                const overlaps=labels.some(label=>{const r=label.getBoundingClientRect();return r.left<b.right && r.right>b.left && r.top<b.bottom && r.bottom>b.top;});
+                return {type:button.dataset.image,inside:b.left>=p.left&&b.right<=p.right&&b.top>=p.top&&b.bottom<=p.bottom,overlaps};
+            })""")
+            assert all(item['inside'] and not item['overlaps'] for item in image_positions), image_positions
             assert max(metrics['panels'])-min(metrics['panels']) < 1, metrics
             for metric in ('votes','share','gap'):
                 page.locator(f'[data-metric={metric}]').click()
@@ -136,12 +155,47 @@ try:
                 page.locator('#copy-button').click()
                 copied=page.evaluate('navigator.clipboard.readText()')
                 assert '1위 RESCENE' in copied and '2위 RIIZE' in copied and '3위' not in copied
-                with page.expect_download() as download:
-                    page.locator('#png-button').click()
-                assert Path(download.value.path()).read_bytes().startswith(b'\x89PNG')
-                png_text=page.evaluate('window.pngText')
-                assert page.locator('#chart-axis-note').inner_text() in png_text
-                assert all(tick in png_text for tick in page.locator('.y-tick').all_text_contents())
+                page.evaluate('''() => {const original=KGMAImages.render;KGMAImages.render=model=>{window.lastImageModel=model;return original(model);};}''')
+                def panel_image(kind, index=0):
+                    page.evaluate('window.pngText=[];window.pngOverflow=[]')
+                    with page.expect_download() as download:
+                        page.locator(f'[data-image="{kind}"]').nth(index).click()
+                    raw=Path(download.value.path()).read_bytes()
+                    assert raw.startswith(b'\x89PNG') and len(raw)>3000
+                    w,h=struct.unpack('>II',raw[16:24])
+                    assert 0<w<=4096 and 0<h<=4096 and w*h<=8000000, (w,h)
+                    assert not page.evaluate('window.pngOverflow'), page.evaluate('window.pngOverflow')
+                    text=page.evaluate('window.pngText')
+                    print(json.dumps({'image':kind,'width':w,'height':h,'texts':len(text)}),flush=True)
+                    return text
+                for metric in ('votes','share','gap'):
+                    page.locator(f'[data-metric={metric}]').click()
+                    png_text=panel_image('trend')
+                    assert page.locator('#chart-axis-note').inner_text() in png_text
+                    assert all(tick in png_text for tick in page.locator('.y-tick').all_text_contents())
+                    assert '현재 득표 현황' not in png_text
+                for i,name in enumerate(('RESCENE','RIIZE')):
+                    text=panel_image('leader',i)
+                    assert any(name in value and '위' in value for value in text)
+                    assert page.locator('.vote-value').nth(i).inner_text()+'표' in text
+                text=panel_image('overview')
+                assert '100,000,000표' in text and '160회' in text
+                text=panel_image('pace')
+                assert '+10표' in text and '+7표' in text
+                page.locator('#hourly-date').select_option(index=0)
+                assert page.locator('.hourly-row').count()==6
+                text=panel_image('hourly')
+                assert '00:00–01:00' in text and '08:00–09:00' in text
+                assert '2026.10.08 · 선택 날짜의 모든 시간대' in text
+                assert '+120표' in text and '+30표' in text and '집계 중' in text
+                # A full day must also fit conservative mobile canvas limits.
+                dimensions=page.evaluate('''() => {
+                    const model=structuredClone(window.lastImageModel);model.rows=Array.from({length:24},()=>model.rows[0]);
+                    window.pngOverflow=[];const canvas=KGMAImages.render(model),result={w:canvas.width,h:canvas.height};
+                    canvas.width=1;canvas.height=1;return result;
+                }''')
+                assert dimensions['h']<=4096 and dimensions['w']*dimensions['h']<=8000000,dimensions
+                assert not page.evaluate('window.pngOverflow')
             assert not errors, errors
             context.close()
         browser.close()

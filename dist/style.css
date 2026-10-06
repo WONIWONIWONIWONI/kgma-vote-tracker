@@ -17,7 +17,7 @@
 .source-controls{display:flex;flex-direction:column;align-items:flex-end;gap:8px;margin-top:9px}
 .source-controls .quiet-button{padding:7px 10px;font-size:11px;min-height:36px}
 .refresh-controls{display:flex;align-items:center;justify-content:flex-end;gap:10px}
-.export-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.export-controls{display:flex;justify-content:flex-end;gap:7px}
 .export-controls .quiet-button{white-space:nowrap}
 .chart-meta{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 14px;margin-bottom:10px}
 .chart-axis-note{font-size:10px;line-height:1.5;color:#b4c599;font-variant-numeric:tabular-nums}
@@ -128,4 +128,28 @@
   .hourly-panel>.panel-heading{flex-wrap:wrap}
   .hourly-date-label{width:100%;flex-direction:row;align-items:center;justify-content:space-between;margin-top:3px}
   .hourly-date-label select{font-size:11px;min-width:150px}
+}
+
+/* Panel-specific image actions stay clear of titles and numeric values. */
+.has-image-button,.overview-bar{position:relative}
+.panel-image-button{position:absolute;top:19px;right:20px;min-height:36px;padding:6px 9px;font-size:10px;gap:5px;z-index:1;white-space:nowrap}
+.has-image-button>.panel-heading{padding-right:82px}
+.has-image-button>.panel-heading.compact{padding-right:102px}
+.leader>.panel-image-button{top:13px;right:13px;min-height:32px}
+.leader-top{padding-right:72px}
+.overview-bar{padding-top:51px}
+.overview-bar>.panel-image-button{top:9px;right:1px}
+@media(max-width:900px){
+  .leader-top{padding-right:0}
+  .leader{grid-template-rows:32px 38px auto;min-height:158px}
+  .leader>.panel-image-button{top:10px;right:12px;min-height:36px}
+  .leader .artist{padding-right:65px}
+  .has-image-button>.panel-image-button{right:16px;top:16px;min-height:40px}
+}
+@media(max-width:600px){
+  .has-image-button>.panel-heading{flex-wrap:wrap;padding-right:0}
+  .has-image-button>.panel-heading.compact{padding-right:16px}
+  .has-image-button>.panel-heading>div:first-child{width:100%;padding-right:72px;min-height:36px}
+  .has-image-button .range-selector{width:100%;display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+  .has-image-button .hourly-date-label{width:100%;flex-direction:row;align-items:center;justify-content:space-between}
 }
