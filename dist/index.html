@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10120f">
+  <title>KGMA TOP 3 — 투표 트래커</title>
+  <meta name="description" content="2026 KGMA 상위 3팀의 득표수, 점유율, 표차와 시간별 변화를 한눈에.">
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./style.css">
+  <script src="./data/seed.js"></script>
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <div class="site-shell">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="KGMA 트래커 홈"><span class="brand-icon" aria-hidden="true"><i></i><i></i><i></i></span><strong>VOTE<span>/</span>TRACK</strong><span class="brand-edition">2026 KGMA</span></a>
+      <a class="source-link" href="https://berriz.in/ko/vote/2026kgma/" target="_blank" rel="noopener noreferrer">공식 투표 바로가기 <span aria-hidden="true">↗</span></a>
+    </header>
+    <main>
+      <div class="hero">
+        <div><div class="eyebrow"><span class="eyebrow-line"></span>BERRIZ GLOBAL FANS’ CHOICE</div><h1>지금, 선두의 흐름.</h1><p class="hero-copy">상위 3팀의 득표와 격차를 한눈에.</p></div>
+        <div class="hero-right"><div class="status-pill" id="status-pill"><span class="status-dot"></span><span id="status-label">캡처 기록</span></div><p class="source-time" id="source-time">—</p><span class="time-hint">원본 집계 시각 · KST</span></div>
+      </div>
+      <div class="notice" id="notice" role="status"><span class="notice-mark">i</span><span id="notice-text">첨부한 화면의 실제 수치를 불러오는 중입니다.</span></div>
+      <section class="leaders" id="leaders" aria-label="현재 상위 3팀"></section>
+      <section class="overview-bar" aria-label="전체 투표 요약"><div class="total-block"><span class="small-label">전체 투표</span><strong id="total-votes">—</strong><span class="unit">표</span></div><div class="distribution"><div class="share-track" id="share-track"></div><div class="distribution-caption"><span>상위 3팀 합계 <b id="top-share">—</b></span><span>그 외 <b id="other-share">—</b></span></div></div><div class="sample-block"><span class="small-label">누적 기록</span><strong id="sample-count">—</strong><span class="unit">회</span></div></section>
+      <section class="chart-panel panel" aria-labelledby="trend-title">
+        <div class="panel-heading"><div><div class="section-kicker">THE TREND</div><h2 id="trend-title">시간에 따른 변화</h2></div><div class="range-selector" role="group" aria-label="표시 기간"><button data-range="1">1시간</button><button data-range="6">6시간</button><button data-range="24">24시간</button><button data-range="all" aria-pressed="true" class="selected">전체</button></div></div>
+        <div class="chart-controls"><div class="metric-selector" role="group" aria-label="그래프 지표"><button data-metric="votes" class="selected" aria-pressed="true">득표수</button><button data-metric="share">점유율</button><button data-metric="gap">표차</button></div><div class="chart-legend" id="chart-legend"></div></div>
+        <div class="chart-wrap"><div class="chart-unit" id="chart-unit">득표수 (표)</div><svg id="trend-chart" viewBox="0 0 1100 310" role="img" aria-label="상위 3팀의 득표 추이"></svg><div class="tooltip" id="tooltip" role="status" hidden></div></div>
+        <div class="chart-bottom"><p id="chart-note"></p><span id="chart-window"></span></div>
+      </section>
+      <div class="below-grid">
+        <section class="panel gaps-panel" aria-labelledby="gap-title"><div class="panel-heading compact"><div><div class="section-kicker">THE DISTANCE</div><h2 id="gap-title">순위 사이의 거리</h2></div><span class="panel-tag">현재 표차</span></div><div id="gap-list"></div><p class="panel-footnote">같은 집계 시점의 득표수를 비교합니다.</p></section>
+        <section class="panel activity-panel" aria-labelledby="recent-title"><div class="panel-heading compact"><div><div class="section-kicker">THE PACE</div><h2 id="recent-title">최근 5분의 움직임</h2></div><span class="panel-tag" id="pace-tag">기록 대기</span></div><div class="table-scroll"><table><thead><tr><th scope="col">아티스트</th><th scope="col">증가 표수</th><th scope="col">점유율 변화</th></tr></thead><tbody id="pace-body"></tbody></table></div><p class="panel-footnote" id="pace-note"></p></section>
+      </div>
+      <section class="panel history-panel" aria-labelledby="history-title"><div class="panel-heading compact"><div><div class="section-kicker">THE RECORD</div><h2 id="history-title">집계 기록</h2></div><div class="history-actions"><button class="quiet-button" id="refresh-button"><span aria-hidden="true">↻</span> 새로고침</button><button class="quiet-button" id="csv-button"><span aria-hidden="true">↓</span> CSV</button></div></div><div class="table-scroll"><table class="history-table"><thead><tr><th scope="col">집계 시각 (KST)</th><th scope="col">1위 · 득표수</th><th scope="col">2위 · 득표수</th><th scope="col">3위 · 득표수</th><th scope="col">1–2위 표차</th></tr></thead><tbody id="history-body"></tbody></table></div><button class="load-more" id="load-more" hidden>기록 더 보기</button></section>
+      <div class="share-row"><p>같이 보고, 함께 응원해요.</p><div><button class="quiet-button" id="copy-button">요약 복사</button><button class="quiet-button" id="png-button">그래프 PNG 저장 <span aria-hidden="true">↗</span></button></div></div>
+      <details class="method"><summary>수치와 그래프는 어떻게 읽나요?<span aria-hidden="true">＋</span></summary><div><p>점유율은 해당 팀의 득표수를 <b>전체 투표수</b>로 나눈 값입니다. 카드에는 원본에 표시된 소수 첫째 자리 점유율을 표시합니다. 표차는 1–2위, 2–3위, 1–3위의 득표수 차이입니다.</p><p>득표수·점유율 그래프는 현재 상위 3팀을 팀 이름별로 추적합니다. 과거에 상위 3위 밖에 있던 팀의 값은 비워 둡니다. 표차 그래프는 각 시점의 1·2·3위를 비교하므로 팀이 바뀔 수 있습니다. 누락된 수집 구간은 선으로 이어 그리지 않습니다.</p><p>과거 값은 만들어 채우지 않습니다. 유효한 기록이 두 개 이상 쌓이면 추이선이 생깁니다. 새로고침은 이미 수집된 기록을 가져오며, 수집기 실행과는 별개입니다. GitHub 예약 수집은 지연되거나 누락될 수 있으므로 실제 집계 시각을 확인해 주세요.</p></div></details>
+    </main>
+    <footer><span class="footer-brand">VOTE/TRACK</span><p>팬이 만든 비공식 대시보드 · 데이터 출처 <a href="https://berriz.in/ko/vote/2026kgma/" target="_blank" rel="noopener noreferrer">Berriz ↗</a></p><span>모든 시각은 한국 시간 (KST)</span></footer>
+  </div><div class="toast" role="status" id="toast" hidden></div>
+</body>
+</html>

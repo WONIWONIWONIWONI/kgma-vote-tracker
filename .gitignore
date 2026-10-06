@@ -1,0 +1,10 @@
+node_modules/
+.sites-runtime/
+work/
+outputs/
+.env*
+__pycache__/
+*.pyc
+.venv/
+collector/debug/
+*.zip

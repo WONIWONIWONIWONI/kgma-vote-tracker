@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "sourceUrl": "https://berriz.in/ko/vote/2026kgma/",
+  "collector": {"state": "not_connected", "intervalSeconds": 300, "lastAttemptAt": null, "lastSuccessAt": null, "error": null},
+  "snapshots": [
+    {
+      "sourceAt": "2026-10-06T15:15:00Z",
+      "collectedAt": null,
+      "origin": "user_capture",
+      "totalVotes": 11195,
+      "top3": [
+        {"rank": 1, "id": "rescene", "name": "RESCENE", "votes": 3279, "reportedShare": 29.3},
+        {"rank": 2, "id": "riize", "name": "RIIZE", "votes": 2895, "reportedShare": 25.9},
+        {"rank": 3, "id": "shownu x hyungwon", "name": "SHOWNU X HYUNGWON", "votes": 839, "reportedShare": 7.5}
+      ]
+    }
+  ]
+}
