@@ -1,18 +1,19 @@
-name: Collect KGMA votes and publish
+name: Collect KGMA votes continuously
 
 on:
   workflow_dispatch:
+  # Keep one successor queued while the current job checks every five minutes.
+  # New scheduled runs replace only the pending run, never the active collector.
   schedule:
-    - cron: '2-59/5 * * * *'
+    - cron: '7,22,37,52 * * * *'
   push:
     branches: [main]
-    paths-ignore:
-      - 'dist/data/**'
+    paths:
+      - 'collector/**'
+      - '.github/workflows/collect-and-publish.yml'
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 concurrency:
   group: kgma-collector-and-pages
@@ -20,15 +21,15 @@ concurrency:
 
 jobs:
   collect:
+    # This project is intended to use free standard public-repository runners only.
+    if: github.event.repository.private == false && vars.COLLECT_ENABLED != 'false'
     runs-on: ubuntu-latest
-    timeout-minutes: 8
-    outputs:
-      collector_ok: ${{ steps.collect.outcome }}
+    timeout-minutes: 345
     steps:
       - uses: actions/checkout@v4
         with:
-          # Preserve snapshots saved after an earlier attempt of this workflow.
           ref: main
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -40,44 +41,13 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('collector/requirements.txt') }}
       - run: python -m playwright install --with-deps chromium
-      - name: Read public rankings
-        id: collect
-        continue-on-error: true
-        env:
-          COLLECT_UNTIL: ${{ vars.COLLECT_UNTIL }}
-        run: python collector/collect.py
-      - name: Preserve records and collector status
+      - name: Verify collector
+        run: python -m unittest discover -s collector -p 'test_*.py'
+      - name: Configure record commits
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add dist/data/history.json dist/data/seed.js
-          if ! git diff --cached --quiet; then
-            git commit -m 'Update observed KGMA ranking records'
-            git push
-          fi
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-      - uses: actions/upload-artifact@v4
-        if: steps.collect.outcome == 'failure'
-        with:
-          name: collector-diagnostics
-          path: collector/debug
-          if-no-files-found: ignore
-          retention-days: 3
-  publish:
-    needs: collect
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy
-        id: deployment
-        uses: actions/deploy-pages@v4
-      - name: Surface collector failure after publishing the last valid record
-        if: needs.collect.outputs.collector_ok == 'failure'
-        run: |
-          echo 'Collector failed. The last valid record and its error status were published.'
-          exit 1
+      - name: Collect and save every five minutes for up to 5.5 hours
+        env:
+          COLLECT_UNTIL: ${{ vars.COLLECT_UNTIL }}
+        run: python -u collector/runner.py --minutes 330

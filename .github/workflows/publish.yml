@@ -1,0 +1,45 @@
+name: Publish KGMA dashboard
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'dist/index.html'
+      - 'dist/app.js'
+      - 'dist/style.css'
+      - 'dist/favicon.svg'
+      - '.github/workflows/publish.yml'
+  # Refresh the deployed fallback copy; live data does not wait for this.
+  schedule:
+    - cron: '17 */6 * * *'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: kgma-pages-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event.repository.private == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+          retention-days: 1
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

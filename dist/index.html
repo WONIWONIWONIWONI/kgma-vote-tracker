@@ -9,7 +9,7 @@
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./style.css">
   <script src="./data/seed.js"></script>
-  <script src="./app.js" defer></script>
+  <script src="./app.js?v=20261007-observed" defer></script>
 </head>
 <body>
   <div class="site-shell">
@@ -33,11 +33,11 @@
       </section>
       <div class="below-grid">
         <section class="panel gaps-panel" aria-labelledby="gap-title"><div class="panel-heading compact"><div><div class="section-kicker">THE DISTANCE</div><h2 id="gap-title">순위 사이의 거리</h2></div><span class="panel-tag">현재 표차</span></div><div id="gap-list"></div><p class="panel-footnote">같은 집계 시점의 득표수를 비교합니다.</p></section>
-        <section class="panel activity-panel" aria-labelledby="recent-title"><div class="panel-heading compact"><div><div class="section-kicker">THE PACE</div><h2 id="recent-title">최근 5분의 움직임</h2></div><span class="panel-tag" id="pace-tag">기록 대기</span></div><div class="table-scroll"><table><thead><tr><th scope="col">아티스트</th><th scope="col">증가 표수</th><th scope="col">점유율 변화</th></tr></thead><tbody id="pace-body"></tbody></table></div><p class="panel-footnote" id="pace-note"></p></section>
+        <section class="panel activity-panel" aria-labelledby="recent-title"><div class="panel-heading compact"><div><div class="section-kicker">THE PACE</div><h2 id="recent-title">직전 관측 대비 움직임</h2></div><span class="panel-tag" id="pace-tag">기록 대기</span></div><div class="table-scroll"><table><thead><tr><th scope="col">아티스트</th><th scope="col">표수 변화</th><th scope="col">점유율 변화</th></tr></thead><tbody id="pace-body"></tbody></table></div><p class="panel-footnote" id="pace-note"></p></section>
       </div>
       <section class="panel history-panel" aria-labelledby="history-title"><div class="panel-heading compact"><div><div class="section-kicker">THE RECORD</div><h2 id="history-title">집계 기록</h2></div><div class="history-actions"><button class="quiet-button" id="refresh-button"><span aria-hidden="true">↻</span> 새로고침</button><button class="quiet-button" id="csv-button"><span aria-hidden="true">↓</span> CSV</button></div></div><div class="table-scroll"><table class="history-table"><thead><tr><th scope="col">집계 시각 (KST)</th><th scope="col">1위 · 득표수</th><th scope="col">2위 · 득표수</th><th scope="col">3위 · 득표수</th><th scope="col">1–2위 표차</th></tr></thead><tbody id="history-body"></tbody></table></div><button class="load-more" id="load-more" hidden>기록 더 보기</button></section>
       <div class="share-row"><p>같이 보고, 함께 응원해요.</p><div><button class="quiet-button" id="copy-button">요약 복사</button><button class="quiet-button" id="png-button">그래프 PNG 저장 <span aria-hidden="true">↗</span></button></div></div>
-      <details class="method"><summary>수치와 그래프는 어떻게 읽나요?<span aria-hidden="true">＋</span></summary><div><p>점유율은 해당 팀의 득표수를 <b>전체 투표수</b>로 나눈 값입니다. 카드에는 원본에 표시된 소수 첫째 자리 점유율을 표시합니다. 표차는 1–2위, 2–3위, 1–3위의 득표수 차이입니다.</p><p>득표수·점유율 그래프는 현재 상위 3팀을 팀 이름별로 추적합니다. 과거에 상위 3위 밖에 있던 팀의 값은 비워 둡니다. 표차 그래프는 각 시점의 1·2·3위를 비교하므로 팀이 바뀔 수 있습니다. 누락된 수집 구간은 선으로 이어 그리지 않습니다.</p><p>과거 값은 만들어 채우지 않습니다. 유효한 기록이 두 개 이상 쌓이면 추이선이 생깁니다. 새로고침은 이미 수집된 기록을 가져오며, 수집기 실행과는 별개입니다. GitHub 예약 수집은 지연되거나 누락될 수 있으므로 실제 집계 시각을 확인해 주세요.</p></div></details>
+      <details class="method"><summary>수치와 그래프는 어떻게 읽나요?<span aria-hidden="true">＋</span></summary><div><p>점유율은 해당 팀의 득표수를 <b>전체 투표수</b>로 나눈 값입니다. 카드에는 원본에 표시된 소수 첫째 자리 점유율을 표시합니다. 표차는 1–2위, 2–3위, 1–3위의 득표수 차이입니다.</p><p>득표수·점유율 그래프는 현재 상위 3팀을 팀 이름별로 추적합니다. 과거에 상위 3위 밖에 있던 팀은 해당 시점의 관측점이 없습니다. 표차 그래프는 각 시점의 1·2·3위를 비교하므로 팀이 바뀔 수 있습니다. 미관측 구간도 앞뒤 관측점을 직선으로 연결합니다. 선 중간의 값은 실제 관측값이 아니며, 툴팁과 CSV에는 관측 기록만 표시합니다.</p><p>변화량은 가장 최근 기록과 바로 직전 관측 기록을 비교합니다. 관측 간격이 5분보다 길어도 그 전체 구간의 변화를 보여 주며, 실제 비교 간격과 시각을 함께 표시합니다. 실행 중인 수집기가 5분마다 확인하고 화면은 1분마다 최신 저장 기록을 읽습니다. 원본 갱신과 작업 교대 시 지연될 수 있으므로 실제 집계 시각을 확인해 주세요.</p></div></details>
     </main>
     <footer><span class="footer-brand">VOTE/TRACK</span><p>팬이 만든 비공식 대시보드 · 데이터 출처 <a href="https://berriz.in/ko/vote/2026kgma/" target="_blank" rel="noopener noreferrer">Berriz ↗</a></p><span>모든 시각은 한국 시간 (KST)</span></footer>
   </div><div class="toast" role="status" id="toast" hidden></div>
