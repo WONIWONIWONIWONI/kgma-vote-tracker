@@ -4,8 +4,8 @@ window.KGMA_SEED = {
   "collector": {
     "state": "ok",
     "intervalSeconds": 300,
-    "lastAttemptAt": "2026-10-06T16:23:12Z",
-    "lastSuccessAt": "2026-10-06T16:23:14Z",
+    "lastAttemptAt": "2026-10-06T16:24:32Z",
+    "lastSuccessAt": "2026-10-06T16:24:35Z",
     "error": null
   },
   "snapshots": [
@@ -127,7 +127,7 @@ window.KGMA_SEED = {
     },
     {
       "sourceAt": "2026-10-06T16:20:00Z",
-      "collectedAt": "2026-10-06T16:23:14Z",
+      "collectedAt": "2026-10-06T16:24:35Z",
       "origin": "berriz_public_page",
       "totalVotes": 12352,
       "top3": [
