@@ -14,10 +14,11 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: kgma-collector-and-pages
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 jobs:
   collect:
@@ -25,22 +26,31 @@ jobs:
     if: github.event.repository.private == false && vars.COLLECT_ENABLED != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 345
+    env:
+      COLLECT_UNTIL: ${{ vars.COLLECT_UNTIL }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
+      - name: Check operating window before installing dependencies
+        id: window
+        run: python collector/policy.py >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v5
+        if: steps.window.outputs.active == 'true'
         with:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: collector/requirements.txt
       - run: pip install -r collector/requirements.txt
+        if: steps.window.outputs.active == 'true'
       - uses: actions/cache@v4
+        if: steps.window.outputs.active == 'true'
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('collector/requirements.txt') }}
       - run: python -m playwright install --with-deps chromium
+        if: steps.window.outputs.active == 'true'
       - name: Verify collector
         run: python -m unittest discover -s collector -p 'test_*.py'
       - name: Configure record commits
@@ -48,6 +58,9 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
       - name: Collect and save every five minutes for up to 5.5 hours
-        env:
-          COLLECT_UNTIL: ${{ vars.COLLECT_UNTIL }}
         run: python -u collector/runner.py --minutes 330
+      - name: Disable future schedules after the two-week window
+        if: always() && !cancelled()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python collector/lifecycle.py

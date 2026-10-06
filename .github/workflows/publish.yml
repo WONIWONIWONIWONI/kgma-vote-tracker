@@ -10,12 +10,12 @@ on:
       - 'dist/style.css'
       - 'dist/favicon.svg'
       - '.github/workflows/publish.yml'
-  # Refresh the deployed fallback copy; live data does not wait for this.
-  schedule:
-    - cron: '17 */6 * * *'
+      - 'collector/prepare_site.py'
+      - 'collector/policy.py'
 
 permissions:
   contents: read
+  actions: write
   pages: write
   id-token: write
 
@@ -35,6 +35,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main
+      - name: Prepare compact fallback and enforce size ceiling
+        run: python collector/prepare_site.py
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
@@ -43,3 +45,12 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
+      - name: Remove the temporary artifact after successful deployment
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" --jq '.artifacts[] | select(.name == "github-pages") | .id' |
+          while read -r artifact_id; do
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact_id"
+          done

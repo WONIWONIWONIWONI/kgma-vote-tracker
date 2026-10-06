@@ -6,7 +6,7 @@
   const palette = ['#c2ee64', '#b3a2ff', '#76cef0', '#f1b87a', '#ed9cca', '#8cd5b1'];
   const colors = {rescene:palette[0],riize:palette[1],'shownu x hyungwon':palette[2]};
   const gapDefs = [{id:'gap12',name:'1–2위',a:0,b:1,color:palette[0]}, {id:'gap23',name:'2–3위',a:1,b:2,color:palette[1]}, {id:'gap13',name:'1–3위',a:0,b:2,color:palette[2]}];
-  const state = {data:window.KGMA_SEED,metric:'votes',range:'all',historyLimit:12,fetching:false,loadFailed:false};
+  const state = {data:window.KGMA_SEED,metric:'votes',range:'all',historyLimit:12,fetching:false,loadFailed:false,historyLoaded:false,lastCheckedAt:0};
   const escapeHTML = value => String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const fmt = n => nf.format(n);
   const share = (team,snap) => 100*team.votes/snap.totalVotes;
@@ -32,13 +32,16 @@
     return {...data,snapshots};
   }
   const liveHistoryURL = 'https://raw.githubusercontent.com/WONIWONIWONIWONI/kgma-vote-tracker/main/dist/data/history.json';
+  const liveLatestURL=liveHistoryURL.replace('history.json','latest.json');
+  const refreshEvery=300000,refreshOffset=150000;
+  const operationEnd=()=>Date.parse(state.data.operation?.endsAt||'2026-10-20T15:45:00Z');
   const latest = () => state.data.snapshots.at(-1);
   function previousObservation(){return state.data.snapshots.at(-2)||null;}
   function getSeries() {return state.metric==='gap'?gapDefs:latest().top3.map(t=>({id:t.id,name:t.name,color:colorOf(t)}));}
   function getValue(s,series) {if(state.metric==='gap')return s.top3[series.a].votes-s.top3[series.b].votes;const team=s.top3.find(t=>t.id===series.id);return team?(state.metric==='share'?share(team,s):team.votes):null;}
   function windowSnapshots(){const all=state.data.snapshots;if(state.range==='all')return all;const min=Date.parse(latest().sourceAt)-Number(state.range)*3600000;return all.filter(s=>Date.parse(s.sourceAt)>=min);}
   function change(v,digits=0){return `${v>0?'+':v<0?'−':''}${digits?Math.abs(v).toFixed(digits):fmt(Math.abs(v))}`;}
-  function status(){const last=latest();const capture=last.origin==='user_capture';const stale=Date.now()-Date.parse(last.sourceAt)>15*60000;const failed=state.data.collector?.state==='error';const stopped=state.data.collector?.state==='stopped';$('status-pill').className='status-pill '+(capture?'':stale||failed||stopped?'stale':'live');$('status-label').textContent=capture?'캡처 기록':failed?'수집 오류':stopped?'수집 종료':stale?'갱신 지연':'최근 수집 확인';$('source-time').textContent=kst(last.sourceAt);let note=capture?'첨부 화면의 실제 수치 1건입니다. 자동 수집 연결 전이며, 기록이 더 쌓이면 추이선이 표시됩니다.':failed?'최근 수집에 실패했습니다. 마지막으로 확인한 기록을 표시하며, 누락된 값은 채우지 않습니다.':stopped?'설정된 수집 기간이 끝났습니다. 마지막으로 저장된 기록을 표시합니다.':stale?'새 기록이 15분 이상 들어오지 않았습니다. 아래 집계 시각의 수치를 표시합니다.':'실행 중인 수집기가 5분마다 확인하며, 화면은 1분마다 최신 기록을 불러옵니다. 원본 갱신과 작업 교대 시 지연될 수 있습니다.';if(state.loadFailed)note+=' 최신 기록 파일을 불러오지 못해 보관된 기록을 표시합니다.';$('notice-text').textContent=note;$('notice').className='notice '+(!capture&&!stale&&!failed?'good':'');}
+  function status(){const last=latest();const capture=last.origin==='user_capture';const stale=Date.now()-Date.parse(last.sourceAt)>15*60000;const failed=state.data.collector?.state==='error';const stopped=state.data.collector?.state==='stopped'||Date.now()>=operationEnd();$('status-pill').className='status-pill '+(capture?'':stale||failed||stopped?'stale':'live');$('status-label').textContent=capture?'캡처 기록':failed?'수집 오류':stopped?'수집 종료':stale?'갱신 지연':'최근 수집 확인';$('source-time').textContent=kst(last.sourceAt);let note=capture?'첨부 화면의 실제 수치 1건입니다. 자동 수집 연결 전이며, 기록이 더 쌓이면 추이선이 표시됩니다.':failed?'최근 수집에 실패했습니다. 마지막으로 확인한 기록을 표시하며, 누락된 값은 채우지 않습니다.':stopped?'설정된 수집 기간이 끝났습니다. 마지막으로 저장된 기록을 표시합니다.':stale?'새 기록이 15분 이상 들어오지 않았습니다. 아래 집계 시각의 수치를 표시합니다.':'실행 중인 수집기가 5분마다 확인하며, 화면은 5분마다 최근 기록만 불러옵니다. 원본 갱신과 작업 교대 시 지연될 수 있습니다.';if(state.loadFailed)note+=' 최신 기록 파일을 불러오지 못해 보관된 기록을 표시합니다.';$('notice-text').textContent=note;$('notice').className='notice '+(!capture&&!stale&&!failed?'good':'');}
   function renderCards(){const last=latest();$('leaders').innerHTML=last.top3.map((t,i)=>`<article class="leader ${i===0?'first':''}" style="--color:${colorOf(t)}"><div class="leader-top"><span class="rank-badge"><b>${String(i+1).padStart(2,'0')}</b> RANK</span>${i===0?'<span class="mini-label">현재 선두</span>':''}</div><h2 class="artist" title="${escapeHTML(t.name)}"><i class="artist-dot"></i>${escapeHTML(t.name)}</h2><div class="count-row"><strong class="vote-value">${fmt(t.votes)}</strong><span class="unit">표</span><span class="share-value">${displayShare(t,last)}<span>%</span></span></div><div class="leader-bottom"><span>전체 투표 중 점유율</span><b>${i===0?`2위와 ${fmt(t.votes-last.top3[1].votes)}표 차이`:`1위와 ${fmt(last.top3[0].votes-t.votes)}표 차이`}</b></div></article>`).join('');$('total-votes').textContent=fmt(last.totalVotes);$('sample-count').textContent=fmt(state.data.snapshots.length);const sum=last.top3.reduce((s,t)=>s+t.votes,0);$('top-share').textContent=(sum/last.totalVotes*100).toFixed(1)+'%';$('other-share').textContent=((last.totalVotes-sum)/last.totalVotes*100).toFixed(1)+'%';$('share-track').innerHTML=last.top3.map(t=>`<i style="width:${share(t,last)}%;background:${colorOf(t)}" title="${escapeHTML(t.name)} ${displayShare(t,last)}%"></i>`).join('')+`<i style="width:${100-sum/last.totalVotes*100}%;background:#3b4332" title="그 외"></i>`;}
   function renderGaps(){const last=latest(),max=last.top3[0].votes-last.top3[2].votes;$('gap-list').innerHTML=gapDefs.map(g=>{const n=last.top3[g.a].votes-last.top3[g.b].votes;return `<div class="gap-row"><span class="gap-ranks"><b>${g.a+1}</b>위 <span>–</span> <b>${g.b+1}</b>위</span><div><span class="pair-names">${escapeHTML(last.top3[g.a].name)} · ${escapeHTML(last.top3[g.b].name)}</span><div class="gap-track"><i style="width:${max?n/max*100:0}%;background:${g.color}"></i></div></div><strong class="gap-value">${fmt(n)}<small>표</small></strong></div>`;}).join('');}
   function renderPace(){const last=latest(),prev=previousObservation();$('pace-tag').textContent=prev?`${fmt((Date.parse(last.sourceAt)-Date.parse(prev.sourceAt))/60000)}분 간격`:'기록 대기';$('pace-body').innerHTML=last.top3.map(t=>{const p=prev?.top3.find(x=>x.id===t.id);const delta=p?t.votes-p.votes:null,pp=p?share(t,last)-share(p,prev):null;return `<tr><td><span class="table-artist" style="--color:${colorOf(t)}"><i></i>${escapeHTML(t.name)}</span></td><td class="${delta==null?'no-value':delta>=0?'positive':'negative'}">${delta==null?'—':change(delta)+'표'}</td><td class="${pp==null?'no-value':pp>=0?'positive':'negative'}">${pp==null?'—':change(pp,2)+'%p'}</td></tr>`;}).join('');$('pace-note').textContent=prev?`${kst(prev.sourceAt,'short')} → ${kst(last.sourceAt,'short')} · 직전 관측 대비 변화입니다. 직전 관측에서 상위 3위 밖인 팀은 비교 값이 없습니다.`:'관측 기록이 두 개 이상이면 직전 관측 대비 변화를 표시합니다. 아직 없는 값은 —로 표시합니다.';}
@@ -52,30 +55,62 @@
   function hideTooltip(){$('tooltip').hidden=true;}
   function render(){status();renderCards();renderGaps();renderPace();renderHistory();renderChart();}
   function dataRevision(data){return Date.parse(data.collector?.lastAttemptAt||data.snapshots.at(-1).collectedAt||data.snapshots.at(-1).sourceAt);}
+  function checkNewer(candidate){
+    const currentTime=Date.parse(latest().sourceAt),nextTime=Date.parse(candidate.snapshots.at(-1).sourceAt);
+    if(nextTime<currentTime||(nextTime===currentTime&&dataRevision(candidate)<dataRevision(state.data)))throw new Error('더 오래된 기록입니다.');
+    return candidate;
+  }
+  function mergeRecent(current,recent){
+    const rows=new Map(current.snapshots.map(s=>[s.sourceAt,s]));
+    recent.snapshots.forEach(s=>rows.set(s.sourceAt,s));
+    // A long absence or a historical edit requires a full resync, not an invented gap.
+    if(!Number.isSafeInteger(recent.historyCount)||rows.size!==recent.historyCount)return null;
+    return normalize({...recent,snapshots:[...rows.values()]});
+  }
+  async function fetchRecord(source,manual){
+    const url=new URL(source);
+    // Share one cache URL per update window rather than creating a URL per visitor.
+    url.searchParams.set('v',String(manual?Date.now():Math.floor((Date.now()-refreshOffset)/refreshEvery)));
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
+    try{
+      const response=await fetch(url,{cache:manual?'reload':'default',signal:controller.signal});
+      if(!response.ok)throw new Error('기록을 읽지 못했습니다.');
+      return normalize(await response.json());
+    }finally{clearTimeout(timer);}
+  }
   async function refresh(manual=false){
     if(state.fetching||location.protocol==='file:')return;
-    state.fetching=true;$('refresh-button').disabled=true;
+    state.fetching=true;state.lastCheckedAt=Date.now();$('refresh-button').disabled=true;
     try{
-      // The public repository record updates independently of Pages deployments.
-      // Try the deployed copy if the live endpoint cannot be reached.
-      const sources=[liveHistoryURL,new URL('./data/history.json',location.href).href];
-      let next=null,liveLoaded=false;
-      for(const [i,source] of sources.entries()){
-        try{
-          const url=new URL(source);url.searchParams.set('v',String(Date.now()));
-          const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),12000);
-          let candidate;
-          try{const response=await fetch(url,{cache:'no-store',signal:controller.signal});if(!response.ok)throw new Error('기록을 읽지 못했습니다.');candidate=normalize(await response.json());}finally{clearTimeout(timer);}
-          const currentTime=Date.parse(latest().sourceAt),nextTime=Date.parse(candidate.snapshots.at(-1).sourceAt);
-          if(nextTime<currentTime||(nextTime===currentTime&&dataRevision(candidate)<dataRevision(state.data)))throw new Error('더 오래된 기록입니다.');
-          next=candidate;liveLoaded=i===0;break;
-        }catch{/* Keep the latest valid observation when an endpoint is unavailable. */}
+      let candidate;
+      if(!state.historyLoaded){candidate=await fetchRecord(liveHistoryURL,manual);}
+      else{
+        const recent=checkNewer(await fetchRecord(liveLatestURL,manual));
+        candidate=mergeRecent(state.data,recent);
+        if(!candidate)candidate=await fetchRecord(liveHistoryURL,manual);
       }
-      if(!next)throw new Error('새 기록을 불러오지 못했습니다.');
-      state.data=next;state.loadFailed=!liveLoaded;render();
-      if(manual)toast(liveLoaded?'저장된 최신 기록을 불러왔습니다.':'최신 기록 연결이 지연되어 배포 당시 기록을 표시합니다.');
-    }catch{state.loadFailed=true;status();if(manual)toast('새 기록을 불러오지 못했습니다. 기존 기록을 유지합니다.');}
-    finally{state.fetching=false;$('refresh-button').disabled=false;}
+      checkNewer(candidate);
+      if(candidate.historyCount!=null&&candidate.historyCount!==candidate.snapshots.length)throw new Error('전체 기록이 누락되었습니다.');
+      state.data=candidate;state.historyLoaded=true;state.loadFailed=false;render();
+      if(manual)toast('저장된 최신 기록을 불러왔습니다.');
+    }catch{
+      // Load the deployed fallback once if the first connection fails.
+      if(!state.historyLoaded){
+        try{const fallback=checkNewer(await fetchRecord(new URL('./data/history.json',location.href).href,manual));state.data=fallback;}catch{}
+      }
+      state.loadFailed=true;render();
+      if(manual)toast('새 기록을 불러오지 못했습니다. 기존 기록을 유지합니다.');
+    }finally{state.fetching=false;$('refresh-button').disabled=false;}
+  }
+  function autoRefresh(){
+    if(Date.now()>=operationEnd()||state.data.collector?.state==='stopped'){status();return;}
+    if(!document.hidden)refresh();
+    scheduleRefresh();
+  }
+  function scheduleRefresh(){
+    if(Date.now()>=operationEnd()||state.data.collector?.state==='stopped')return;
+    const next=(Math.floor((Date.now()-refreshOffset)/refreshEvery)+1)*refreshEvery+refreshOffset;
+    setTimeout(autoRefresh,Math.max(1000,Math.min(next,operationEnd())-Date.now()));
   }
   function toast(text){$('toast').textContent=text;$('toast').hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('toast').hidden=true,4200);}
   function download(blob,name){const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),10000);}
@@ -87,6 +122,6 @@
       text(kst(g.rows[0].sourceAt,'short'),90,692,12,'#a0ad92');if(g.rows.length>1)text(kst(g.rows.at(-1).sourceAt,'short'),1020,692,12,'#a0ad92');text(g.rows.length===1?'실제 기록 1건 · 두 번째 기록부터 추이선이 표시됩니다.':$('chart-note').textContent,50,729,13,'#a0ad92');text('데이터 출처 Berriz · 비공식 팬 대시보드 · 전체 투표 대비 점유율',50,754,11,'#829272');canvas.toBlob(blob=>{if(blob)download(blob,`kgma-top3-${state.metric}.png`);else toast('이미지 생성에 실패했습니다.');},'image/png');}catch{toast('이미지 생성에 실패했습니다.');}finally{btn.disabled=false;}}
   document.querySelectorAll('[data-metric]').forEach(button=>button.addEventListener('click',()=>{state.metric=button.dataset.metric;document.querySelectorAll('[data-metric]').forEach(b=>{b.classList.toggle('selected',b===button);b.setAttribute('aria-pressed',String(b===button));});hideTooltip();renderChart();}));
   document.querySelectorAll('[data-range]').forEach(button=>button.addEventListener('click',()=>{state.range=button.dataset.range;document.querySelectorAll('[data-range]').forEach(b=>{b.classList.toggle('selected',b===button);b.setAttribute('aria-pressed',String(b===button));});hideTooltip();renderChart();}));
-  $('refresh-button').addEventListener('click',()=>refresh(true));$('csv-button').addEventListener('click',exportCSV);$('copy-button').addEventListener('click',copySummary);$('png-button').addEventListener('click',exportPNG);$('load-more').addEventListener('click',()=>{state.historyLimit+=24;renderHistory();});let resizeTimer;addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(renderChart,120);});document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
-  state.data=normalize(state.data);render();if(location.protocol!=='file:')refresh();setInterval(()=>{if(!document.hidden)refresh();},60000);
+  $('refresh-button').addEventListener('click',()=>refresh(true));$('csv-button').addEventListener('click',exportCSV);$('copy-button').addEventListener('click',copySummary);$('png-button').addEventListener('click',exportPNG);$('load-more').addEventListener('click',()=>{state.historyLimit+=24;renderHistory();});let resizeTimer;addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(renderChart,120);});document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-state.lastCheckedAt>=refreshEvery&&Date.now()<operationEnd()&&state.data.collector?.state!=='stopped')refresh();});
+  state.data=normalize(state.data);render();if(location.protocol!=='file:'){refresh();scheduleRefresh();}
 })();

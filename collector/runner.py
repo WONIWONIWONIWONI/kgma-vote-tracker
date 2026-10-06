@@ -3,12 +3,12 @@ import argparse
 from datetime import datetime, timezone
 import json
 import math
-from pathlib import Path
 import subprocess
 import sys
 import time
 
 from collect import HISTORY, ROOT, save, utc_now
+from policy import end_at
 
 INTERVAL = 300
 OFFSET = 90  # Give the source time to update after each five-minute boundary.
@@ -23,7 +23,7 @@ def git(*args, check=True):
 
 
 def publish_records():
-    git('add', 'dist/data/history.json', 'dist/data/seed.js')
+    git('add', 'dist/data/history.json', 'dist/data/latest.json', 'dist/data/seed.js')
     changed = git('diff', '--cached', '--quiet', check=False)
     if changed.returncode == 0:
         return
@@ -85,7 +85,11 @@ def main():
     if not 1 <= args.minutes <= 330:
         parser.error('--minutes must be between 1 and 330')
     try:
-        return run_for(args.minutes * 60)
+        remaining = max(0, end_at().timestamp() - time.time())
+        result = run_for(min(args.minutes * 60, remaining))
+        if time.time() >= end_at().timestamp():
+            run_cycle()  # Marks the end without contacting Berriz.
+        return result
     except (RuntimeError, subprocess.SubprocessError) as exc:
         print('Continuous collection stopped: ' + str(exc), file=sys.stderr)
         return 1

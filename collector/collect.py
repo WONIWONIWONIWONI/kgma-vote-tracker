@@ -9,6 +9,8 @@ import sys
 import time
 import unicodedata
 
+from policy import end_at, operation, MAX_RECORDS, MAX_HISTORY_BYTES
+
 URL = 'https://berriz.in/ko/vote/2026kgma/'
 KST = timezone(timedelta(hours=9))
 ROOT = Path(__file__).resolve().parents[1]
@@ -96,7 +98,8 @@ def append_snapshot(data, snapshot):
     if old:
         if old['totalVotes'] != snapshot['totalVotes'] or old['top3'] != snapshot['top3']:
             raise ValueError('동일 집계 시각의 값이 달라 기존 기록을 보존했습니다.')
-        old.update(origin=snapshot['origin'], collectedAt=snapshot['collectedAt'])
+        # Retain the first time this source observation was actually obtained.
+        old['origin'] = snapshot['origin']
         return False
     if rows and snapshot['sourceAt'] < max(s['sourceAt'] for s in rows):
         raise ValueError('마지막 기록보다 오래된 응답입니다.')
@@ -106,23 +109,38 @@ def append_snapshot(data, snapshot):
 
 
 def save(data):
-    text = json.dumps(data, ensure_ascii=False, indent=2)
-    tmp = HISTORY.with_suffix('.tmp')
-    tmp.write_text(text+'\n', encoding='utf-8')
-    tmp.replace(HISTORY)
-    seed = HISTORY.parent/'seed.js'
-    seed_tmp = seed.with_suffix('.tmp')
-    seed_tmp.write_text('window.KGMA_SEED = '+text+';\n', encoding='utf-8')
-    seed_tmp.replace(seed)
+    if len(data['snapshots']) > MAX_RECORDS:
+        raise ValueError('Two-week observation storage limit reached; existing files preserved.')
+    data.setdefault('operation', operation())
+    data['historyCount'] = len(data['snapshots'])
+    # Compact JSON cuts storage and transfer size without dropping any observations.
+    text = json.dumps(data, ensure_ascii=False, separators=(',', ':')) + '\n'
+    if len(text.encode('utf-8')) > MAX_HISTORY_BYTES:
+        raise ValueError('Observation file exceeds its 8 MiB safety limit.')
+    recent = {**data, 'snapshots': data['snapshots'][-3:]}
+    small = json.dumps(recent, ensure_ascii=False, separators=(',', ':'))
+    outputs = {HISTORY: text,
+               HISTORY.parent/'latest.json': small + '\n',
+               HISTORY.parent/'seed.js': 'window.KGMA_SEED = ' + small + ';\n'}
+    for path, value in outputs.items():
+        if path.exists() and path.read_text(encoding='utf-8') == value:
+            continue
+        tmp = path.with_suffix('.tmp')
+        tmp.write_text(value, encoding='utf-8')
+        tmp.replace(path)
 
 
 def collect_once(fixture=None, until=None):
     data = json.loads(HISTORY.read_text(encoding='utf-8'))
     collector = data.setdefault('collector', {})
+    previous_state = collector.get('state')
+    needs_format_update = 'historyCount' not in data or 'operation' not in data or not (HISTORY.parent/'latest.json').exists()
+    data['operation'] = operation(until)
     collector.update(lastAttemptAt=utc_now(), intervalSeconds=300)
-    if until and datetime.now(timezone.utc) >= datetime.fromisoformat(until.replace('Z', '+00:00')):
+    if datetime.now(timezone.utc) >= end_at(until):
         collector.update(state='stopped', error=None)
-        save(data)
+        if previous_state != 'stopped' or needs_format_update:
+            save(data)
         print('Configured collection end reached.')
         return 0
     try:
@@ -136,7 +154,8 @@ def collect_once(fixture=None, until=None):
             raise
         added = append_snapshot(data, snapshot)
         collector.update(state='ok', lastSuccessAt=utc_now(), error=None)
-        save(data)
+        if added or previous_state != 'ok' or needs_format_update:
+            save(data)
         print(json.dumps({'ok': True, 'added': added, 'sourceAt': snapshot['sourceAt'], 'top3': snapshot['top3']}, ensure_ascii=False))
         return 0
     except Exception as exc:
@@ -158,7 +177,7 @@ def main():
         return collect_once(args.fixture, args.until)
     while True:
         collect_once(args.fixture, args.until)
-        if args.until and datetime.now(timezone.utc) >= datetime.fromisoformat(args.until.replace('Z', '+00:00')):
+        if datetime.now(timezone.utc) >= end_at(args.until):
             return 0
         time.sleep(max(1, args.every-time.time()%args.every+20))
 
