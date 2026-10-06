@@ -1,70 +1,65 @@
-"""One-off public-page diagnosis; no accounts or voting actions."""
+"""Verify the deployed mobile dashboard against the public record feed."""
+from datetime import datetime
 import json
-import sys
-import time
 from pathlib import Path
+import sys
 from urllib.parse import urlsplit
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'collector'))
-from collect import URL, parse_text, utc_now
+from collect import KST, load_public_snapshot, utc_now
 from playwright.sync_api import sync_playwright
+
+SITE = 'https://woniwoniwoniwoni.github.io/kgma-vote-tracker/'
 
 
 def emit(label, value):
     print(label + ' ' + json.dumps(value, ensure_ascii=False), flush=True)
 
 
-def snapshot(page, label):
-    try:
-        data = parse_text(page.locator('body').inner_text())
-        emit(label, {'now': utc_now(), 'sourceAt': data['sourceAt'],
-                     'totalVotes': data['totalVotes'], 'top3': data['top3']})
-    except Exception as exc:
-        emit(label, {'error': str(exc)[:300]})
-
-
+source = load_public_snapshot()
+emit('PUBLIC_SOURCE', {'now': utc_now(), 'sourceAt': source['sourceAt'],
+                       'totalVotes': source['totalVotes']})
 with sync_playwright() as p:
     browser = p.chromium.launch()
-    for fresh in (False, True):
-        context = browser.new_context(locale='ko-KR', timezone_id='Asia/Seoul')
-        page = context.new_page()
-        responses = []
-        page.on('response', lambda response: responses.append(response)
-                if response.request.resource_type in ('fetch', 'xhr') else None)
-        target = URL + ('?refresh=' + str(int(time.time())) if fresh else '')
-        response = page.goto(target, wait_until='domcontentloaded')
-        emit('DOCUMENT', {'freshURL': fresh, 'status': response.status,
-             'headers': {k: v for k, v in response.headers.items()
-                         if k in ('age', 'date', 'cache-control', 'x-cache')}})
-        page.wait_for_function("/총\\s*투표\\s*수/.test(document.body.innerText)")
-        snapshot(page, 'IMMEDIATE')
-        page.wait_for_timeout(10000)
-        snapshot(page, 'AFTER_10S')
-        for item in responses:
-            url = urlsplit(item.url)
-            if not any(w in url.path.lower() for w in ('vote', 'rank', 'kgma')):
-                continue
-            out = {'endpoint': url.scheme + '://' + url.netloc + url.path,
-                   'status': item.status, 'headers': {k: v for k, v in item.headers.items()
-                       if k in ('age', 'date', 'cache-control', 'x-cache')}}
-            try:
-                out['public_response_excerpt'] = json.dumps(item.json(), ensure_ascii=False)[:2200]
-            except Exception:
-                pass
-            emit('PUBLIC_DATA', out)
-        context.close()
     context = browser.new_context(viewport={'width':390, 'height':844}, is_mobile=True,
                                   locale='ko-KR', timezone_id='Asia/Seoul')
     page = context.new_page()
-    page.on('pageerror', lambda error: emit('PAGE_ERROR', str(error)))
-    page.on('requestfailed', lambda req: emit('FAILED_REQUEST', urlsplit(req.url).netloc + urlsplit(req.url).path))
-    page.goto('https://woniwoniwoniwoni.github.io/kgma-vote-tracker/', wait_until='networkidle')
-    page.wait_for_timeout(3000)
-    emit('LIVE_DASHBOARD', page.evaluate("""() => ({
+    errors, records = [], []
+    page.on('pageerror', lambda error: errors.append(str(error)))
+    page.on('response', lambda response: records.append(response)
+            if urlsplit(response.url).netloc == 'raw.githubusercontent.com' else None)
+    page.goto(SITE, wait_until='networkidle')
+    page.wait_for_function("document.querySelector('#history-details')!==null")
+    assert records and records[-1].ok, 'Initial public record fetch failed'
+    with page.expect_response(lambda response: 'raw.githubusercontent.com' in response.url
+                              and '/latest.json?' in response.url) as refreshed:
+        page.locator('#refresh-button').click()
+    response = refreshed.value
+    assert response.ok, response.status
+    assert 'v=' in urlsplit(response.url).query, 'Fresh record URL required'
+    latest = response.json()['snapshots'][-1]
+    expected = datetime.fromisoformat(latest['sourceAt'].replace('Z', '+00:00'))
+    expected_text = expected.astimezone(KST).strftime('%Y.%m.%d %H:%M')
+    page.wait_for_function("expected => document.querySelector('#source-time').textContent === expected", arg=expected_text)
+    metrics = page.evaluate("""() => ({
       source:document.querySelector('#source-time').textContent,
-      notice:document.querySelector('#notice-text').textContent,
+      collected:document.querySelector('#collected-time').textContent,
       viewport:innerWidth, body:document.documentElement.scrollWidth,
-      boxes:[...document.querySelectorAll('.leader,.panel')].map(el=>({
-        class:el.className,width:el.getBoundingClientRect().width,height:el.getBoundingClientRect().height}))
-    })"""))
+      historyClosed:!document.querySelector('#history-details').open,
+      cards:[...document.querySelectorAll('.leader')].map(el=>({
+        width:el.getBoundingClientRect().width,height:el.getBoundingClientRect().height}))
+    })""")
+    collected = datetime.fromisoformat(latest['collectedAt'].replace('Z', '+00:00'))
+    emit('LIVE_DASHBOARD', {**metrics, 'now':utc_now(), 'errors':errors,
+                          'sourceToCollectionSeconds':(collected-expected).total_seconds()})
+    assert not errors, errors
+    assert metrics['viewport'] == 390 and metrics['body'] == 390, metrics
+    assert metrics['historyClosed'], metrics
+    assert len({(c['width'], c['height']) for c in metrics['cards']}) == 1, metrics
+    page.locator('.history-summary').click()
+    assert page.locator('#history-body').is_visible()
+    page.locator('.history-summary').click()
+    assert not page.locator('#history-body').is_visible()
+    emit('RESULT', 'PASS: fresh live data, uniform mobile cards, collapsed history')
     context.close()
     browser.close()
