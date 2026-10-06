@@ -1,7 +1,5 @@
 import copy
 from datetime import datetime, timezone
-from pathlib import Path
-import json
 import unittest
 from collect import parse_text, append_snapshot
 
@@ -47,8 +45,10 @@ class CollectorTests(unittest.TestCase):
         with self.assertRaises(ValueError): parse_text(TEXT.replace('00:15','01:15'), NOW)
 
     def test_duplicate_snapshot_updates_provenance_without_adding(self):
-        data=json.loads((Path(__file__).resolve().parents[1]/'dist/data/history.json').read_text())
         s=parse_text(TEXT,NOW)
+        old=copy.deepcopy(s)
+        old.update(origin='user_capture', collectedAt=None)
+        data={'snapshots':[old]}
         self.assertFalse(append_snapshot(data,s))
         self.assertEqual(len(data['snapshots']),1)
         self.assertEqual(data['snapshots'][0]['origin'],'berriz_public_page')
