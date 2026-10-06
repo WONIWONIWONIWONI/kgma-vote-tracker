@@ -4,8 +4,8 @@ window.KGMA_SEED = {
   "collector": {
     "state": "ok",
     "intervalSeconds": 300,
-    "lastAttemptAt": "2026-10-06T16:36:28Z",
-    "lastSuccessAt": "2026-10-06T16:36:31Z",
+    "lastAttemptAt": "2026-10-06T16:41:30Z",
+    "lastSuccessAt": "2026-10-06T16:41:35Z",
     "error": null
   },
   "snapshots": [
@@ -179,6 +179,35 @@ window.KGMA_SEED = {
           "id": "shownu x hyungwon",
           "name": "SHOWNU X HYUNGWON",
           "votes": 929,
+          "reportedShare": 7.5
+        }
+      ]
+    },
+    {
+      "sourceAt": "2026-10-06T16:35:00Z",
+      "collectedAt": "2026-10-06T16:41:35Z",
+      "origin": "berriz_public_page",
+      "totalVotes": 12475,
+      "top3": [
+        {
+          "rank": 1,
+          "id": "rescene",
+          "name": "RESCENE",
+          "votes": 3656,
+          "reportedShare": 29.3
+        },
+        {
+          "rank": 2,
+          "id": "riize",
+          "name": "RIIZE",
+          "votes": 3252,
+          "reportedShare": 26.1
+        },
+        {
+          "rank": 3,
+          "id": "shownu x hyungwon",
+          "name": "SHOWNU X HYUNGWON",
+          "votes": 933,
           "reportedShare": 7.5
         }
       ]
