@@ -4,8 +4,8 @@
   "collector": {
     "state": "ok",
     "intervalSeconds": 300,
-    "lastAttemptAt": "2026-10-06T15:54:40Z",
-    "lastSuccessAt": "2026-10-06T15:54:43Z",
+    "lastAttemptAt": "2026-10-06T15:57:58Z",
+    "lastSuccessAt": "2026-10-06T15:58:00Z",
     "error": null
   },
   "snapshots": [
@@ -92,6 +92,35 @@
           "id": "shownu x hyungwon",
           "name": "SHOWNU X HYUNGWON",
           "votes": 894,
+          "reportedShare": 7.5
+        }
+      ]
+    },
+    {
+      "sourceAt": "2026-10-06T15:55:00Z",
+      "collectedAt": "2026-10-06T15:58:00Z",
+      "origin": "berriz_public_page",
+      "totalVotes": 12034,
+      "top3": [
+        {
+          "rank": 1,
+          "id": "rescene",
+          "name": "RESCENE",
+          "votes": 3551,
+          "reportedShare": 29.5
+        },
+        {
+          "rank": 2,
+          "id": "riize",
+          "name": "RIIZE",
+          "votes": 3129,
+          "reportedShare": 26.0
+        },
+        {
+          "rank": 3,
+          "id": "shownu x hyungwon",
+          "name": "SHOWNU X HYUNGWON",
+          "votes": 897,
           "reportedShare": 7.5
         }
       ]
