@@ -4,15 +4,13 @@
 
 ## 현재 확인된 상태
 
-- 초기 데이터는 사용자 캡처의 **2026-10-07 00:15 KST** 실제 수치 1건입니다.
-- 총 11,195표: RESCENE 3,279표, RIIZE 2,895표, SHOWNU X HYUNGWON 839표.
-- 첫 기록의 표차: 1–2위 384표, 2–3위 2,056표, 1–3위 2,440표.
+- 현재 기록은 자동 수집으로 확인한 값만 포함하며 **2026-10-07 00:45 KST**부터 시작합니다. 사용자 캡처로 추가했던 기록은 삭제했습니다.
 - **GitHub Actions에서 실제 공개 페이지 수집과 기록 저장을 확인했습니다.** 첫 성공은 2026-10-07 00:51 KST이며, 원본 집계 시각 00:45 KST의 RESCENE 3,506표, RIIZE 3,091표, SHOWNU X HYUNGWON 892표를 저장했습니다. 작업 환경과 달리 GitHub 실행 환경에서 원본에 정상 접속했습니다.
 - 확인되지 않은 과거 데이터는 포함하지 않았습니다. 수집이 빠진 구간도 보간하지 않습니다.
 
 ## 화면 열기
 
-`dist/index.html`을 열면 첫 기록을 바로 볼 수 있습니다. 웹 서버 또는 GitHub Pages에서는 `dist/data/history.json`을 5분마다 다시 읽습니다. **페이지 새로고침과 데이터 수집은 별개입니다.** 방문자가 없어도 수집하려면 아래 수집기를 별도로 실행해야 합니다.
+`dist/index.html`을 열면 저장된 기록을 바로 볼 수 있습니다. 웹 서버 또는 GitHub Pages에서는 `dist/data/history.json`을 5분마다 다시 읽습니다. **페이지 새로고침과 데이터 수집은 별개입니다.** 현재 운영 중인 GitHub Actions가 방문자 유무와 관계없이 수집하고 Pages를 갱신합니다. 사용자의 컴퓨터나 ChatGPT를 켜 둘 필요가 없습니다.
 
 ## 공개 운영 — GitHub Pages + Actions
 
@@ -62,3 +60,13 @@ python collector/collect.py --every 300
 GitHub 예약 작업 설명: https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule
 
 Playwright Python: https://playwright.dev/python/docs/intro
+
+## 수집 중지와 사이트 종료
+
+- **수집만 중지:** 저장소 Actions → Collect KGMA votes and publish → 우측 `…` → Disable workflow. 실행 중인 작업이 있으면 해당 실행에서 Cancel workflow도 선택합니다. 기존 사이트와 기록은 남습니다.
+- **웹사이트도 내리기:** 먼저 수집 워크플로를 중지한 다음 Settings → Pages → Source를 Deploy from a branch로 변경 → Branch를 None으로 선택 → Save. 저장소의 코드와 기록은 남습니다.
+- **저장소까지 삭제:** Settings → General → Danger Zone → Delete this repository. 이 프로젝트의 코드·수집 기록·사이트가 함께 삭제되므로 보관할 자료가 있으면 먼저 내려받습니다.
+
+현재 구성은 공개 저장소의 표준 `ubuntu-latest` 실행 환경과 GitHub Pages를 사용합니다. 표준 실행 시간과 Pages 호스팅은 무료로 이용할 수 있습니다. 별도 유료 서버나 AI API를 사용하지 않습니다. 저장 공간·캐시의 무료 한도와 유료 설정 변경은 별도 조건을 따릅니다.
+
+공식 안내: https://docs.github.com/en/billing/concepts/product-billing/github-actions
