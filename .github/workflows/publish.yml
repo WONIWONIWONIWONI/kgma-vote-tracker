@@ -7,12 +7,14 @@ on:
     paths:
       - 'dist/index.html'
       - 'dist/app.js'
+      - 'dist/hourly.js'
       - 'dist/style.css'
       - 'dist/favicon.svg'
       - '.github/workflows/publish.yml'
       - 'collector/prepare_site.py'
       - 'collector/policy.py'
       - 'qa/check_layout.py'
+      - 'qa/test_hourly.cjs'
 
 permissions:
   contents: read
@@ -49,7 +51,9 @@ jobs:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('collector/requirements.txt') }}
       - run: python -m playwright install --with-deps chromium
-      - name: Verify mobile widths and collapsed record table
+      - name: Verify exact hourly calculations
+        run: node qa/test_hourly.cjs
+      - name: Verify mobile widths, hourly bars, and exports
         run: python -u qa/check_layout.py
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

@@ -13,14 +13,17 @@ ROOT = Path(__file__).resolve().parents[1]
 data = json.loads((ROOT/'dist/data/history.json').read_text())
 base = copy.deepcopy(data['snapshots'][-1])
 base['totalVotes'] = 100000000
-for team, votes in zip(base['top3'], (12345678, 9876543, 8765432)):
+for team, votes in zip(base['top2'], (12345678, 9876543)):
     team.update(votes=votes, reportedShare=round(votes, 1)/1000000)
 data['snapshots'] = []
-for i in range(80):
+for i in range(160):
     row = copy.deepcopy(base)
-    row['sourceAt'] = (datetime.now(timezone.utc)-timedelta(minutes=5*(79-i))).isoformat()
+    row['sourceAt'] = (datetime(2026,10,7,23,15,tzinfo=timezone.utc)-timedelta(minutes=5*(159-i))).isoformat()
+    for team, step in zip(row['top2'], (10,7)):
+        team['votes'] += i*step
+        team['reportedShare'] = round(team['votes']/row['totalVotes']*100,1)
     data['snapshots'].append(row)
-data['historyCount'] = 80
+data['historyCount'] = 160
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -42,7 +45,7 @@ try:
             errors = []
             page.on('pageerror', lambda error: errors.append(str(error)))
             page.goto(f'http://127.0.0.1:{server.server_port}/', wait_until='networkidle')
-            page.wait_for_function("document.querySelector('#sample-count').textContent==='80'")
+            page.wait_for_function("document.querySelector('#sample-count').textContent==='160'")
             page.wait_for_timeout(600)
             metrics = page.evaluate("""() => ({
                 viewport:innerWidth,body:document.documentElement.scrollWidth,
@@ -59,6 +62,20 @@ try:
             assert metrics['body'] <= width, metrics
             assert not metrics['overlapping'], metrics
             cards = metrics['leaders']
+            assert len(cards) == 2, metrics
+            assert '3위' not in page.locator('body').inner_text()
+            assert 'SHOWNU' not in page.locator('body').inner_text()
+            assert page.locator('#hourly-list .hourly-row').count() == 6
+            assert page.locator('.hourly-team').count() == 12
+            assert page.locator('.hourly-badge').first.inner_text() == '집계 중'
+            assert page.locator('.hourly-value').first.inner_text() == '+30표'
+            assert page.locator('.hourly-value').nth(2).inner_text() == '+120표'
+            page.locator('#hourly-more').click()
+            assert page.locator('#hourly-list .hourly-row').count() == 9
+            page.locator('#hourly-date').select_option(index=1)
+            assert '2026-10-07' == page.locator('#hourly-date').input_value()
+            assert page.locator('#hourly-list .hourly-row').count() == 5
+            assert page.locator('.hourly-scroll').evaluate('(el)=>el.getBoundingClientRect().height')<=571
             assert max(c['w'] for c in cards)-min(c['w'] for c in cards)<1, metrics
             assert max(c['h'] for c in cards)-min(c['h'] for c in cards)<1, metrics
             if width <= 760:
@@ -73,6 +90,20 @@ try:
             assert page.locator('.history-scroll').evaluate('(el)=>el.getBoundingClientRect().height')<=421
             page.locator('.history-summary').click()
             assert not page.locator('#history-body').is_visible()
+            if width == 390:
+                for metric in ('gap','share','votes'):
+                    page.locator(f'[data-metric={metric}]').click()
+                    assert page.locator('#trend-chart path').count() == (1 if metric=='gap' else 2)
+                page.locator('.history-summary').click()
+                with page.expect_download() as download:
+                    page.locator('#csv-button').click()
+                csv=Path(download.value.path()).read_text(encoding='utf-8-sig')
+                assert len(csv.splitlines()) == 321
+                assert 'SHOWNU' not in csv and '3위표차' not in csv
+                with page.expect_download() as download:
+                    page.locator('#png-button').click()
+                assert Path(download.value.path()).read_bytes().startswith(b'\x89PNG')
+            assert not errors, errors
             context.close()
         browser.close()
 finally:

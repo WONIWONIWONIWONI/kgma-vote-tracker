@@ -39,7 +39,7 @@ def parse_text(text, now=None):
     found = {}
     for m in RANK.finditer(text):
         rank = int(m.group(1))
-        if rank > 3 or rank < 1:
+        if rank > 2 or rank < 1:
             continue
         name = ' '.join(m.group(2).split())
         votes = int(m.group(4).replace(',', ''))
@@ -47,19 +47,19 @@ def parse_text(text, now=None):
         if rank in found and found[rank] != team:
             raise ValueError('같은 순위의 내용이 서로 다릅니다.')
         found[rank] = team
-    if set(found) != {1, 2, 3}:
-        raise ValueError('1~3위 세 팀의 값을 모두 읽지 못했습니다. 화면 구조 확인이 필요합니다.')
-    teams = [found[i] for i in (1, 2, 3)]
+    if set(found) != {1, 2}:
+        raise ValueError('1·2위 두 팀의 값을 모두 읽지 못했습니다. 화면 구조 확인이 필요합니다.')
+    teams = [found[i] for i in (1, 2)]
     if total <= 0 or sum(t['votes'] for t in teams) > total:
         raise ValueError('총투표수와 상위 팀의 표수가 맞지 않습니다.')
-    if len({t['id'] for t in teams}) != 3:
+    if len({t['id'] for t in teams}) != 2:
         raise ValueError('중복된 팀이 있습니다.')
-    if any(teams[i]['votes'] < teams[i+1]['votes'] for i in (0, 1)):
+    if any(teams[i]['votes'] < teams[i+1]['votes'] for i in (0,)):
         raise ValueError('순위와 득표수 순서가 맞지 않습니다.')
     if any(abs(100*t['votes']/total-t['reportedShare']) > .151 for t in teams):
         raise ValueError('점유율과 표수의 비율이 맞지 않습니다.')
     return {'sourceAt': source_at.isoformat(timespec='seconds').replace('+00:00', 'Z'),
-            'collectedAt': utc_now(), 'origin': 'berriz_public_page', 'totalVotes': total, 'top3': teams}
+            'collectedAt': utc_now(), 'origin': 'berriz_public_page', 'totalVotes': total, 'top2': teams}
 
 
 def parse_api(payload, now=None):
@@ -71,11 +71,11 @@ def parse_api(payload, now=None):
         raise ValueError('원본 집계 시각에 시간대가 없습니다.')
     total = data['totalVotes']
     candidates = data['candidates']
-    if type(total) is not int or not isinstance(candidates, list) or len(candidates) < 3:
+    if type(total) is not int or not isinstance(candidates, list) or len(candidates) < 2:
         raise ValueError('공개 순위 API의 표수 형식이 올바르지 않습니다.')
     if any(type(t.get('voteCount')) is not int or t['voteCount'] < 0 for t in candidates):
         raise ValueError('후보 득표수 형식이 올바르지 않습니다.')
-    top = sorted(candidates, key=lambda t: -t['voteCount'])[:3]
+    top = sorted(candidates, key=lambda t: -t['voteCount'])[:2]
     # Reuse the existing cross-checks for totals, shares, ordering and timestamps.
     lines = ['총 투표수', str(total), stamp.astimezone(KST).strftime('%Y.%m.%d %H:%M (KST)')]
     for rank, team in enumerate(top, 1):
@@ -101,7 +101,7 @@ def append_snapshot(data, snapshot):
     rows = data['snapshots']
     old = next((s for s in rows if s['sourceAt'] == snapshot['sourceAt']), None)
     if old:
-        if old['totalVotes'] != snapshot['totalVotes'] or old['top3'] != snapshot['top3']:
+        if old['totalVotes'] != snapshot['totalVotes'] or old['top2'] != snapshot['top2']:
             raise ValueError('동일 집계 시각의 값이 달라 기존 기록을 보존했습니다.')
         # Retain the first time this source observation was actually obtained.
         old['origin'] = snapshot['origin']
@@ -113,7 +113,26 @@ def append_snapshot(data, snapshot):
     return True
 
 
+def migrate_top2(data):
+    """Drop only rank three; preserve every observation and the two leaders verbatim."""
+    if data.get('schemaVersion') not in (1, 2):
+        raise ValueError('Unsupported observation schema.')
+    changed = data.get('schemaVersion') != 2
+    for row in data['snapshots']:
+        teams = row.get('top2', row.get('top3'))
+        if not isinstance(teams, list) or len(teams) < 2:
+            raise ValueError('Two observed leaders are required.')
+        if [t.get('rank') for t in teams[:2]] != [1, 2]:
+            raise ValueError('Existing first and second place records are invalid.')
+        changed = changed or 'top3' in row or len(teams) != 2
+        row['top2'] = teams[:2]
+        row.pop('top3', None)
+    data['schemaVersion'] = 2
+    return changed
+
+
 def save(data):
+    migrate_top2(data)
     if len(data['snapshots']) > MAX_RECORDS:
         raise ValueError('Two-week observation storage limit reached; existing files preserved.')
     data.setdefault('operation', operation())
@@ -137,9 +156,10 @@ def save(data):
 
 def collect_once(fixture=None, until=None):
     data = json.loads(HISTORY.read_text(encoding='utf-8'))
+    migrated = migrate_top2(data)
     collector = data.setdefault('collector', {})
     previous_state = collector.get('state')
-    needs_format_update = 'historyCount' not in data or 'operation' not in data or not (HISTORY.parent/'latest.json').exists()
+    needs_format_update = migrated or 'historyCount' not in data or 'operation' not in data or not (HISTORY.parent/'latest.json').exists()
     data['operation'] = operation(until)
     collector.update(lastAttemptAt=utc_now(), intervalSeconds=300)
     if datetime.now(timezone.utc) >= end_at(until):
@@ -154,7 +174,7 @@ def collect_once(fixture=None, until=None):
         collector.update(state='ok', lastSuccessAt=utc_now(), error=None)
         if added or previous_state != 'ok' or needs_format_update:
             save(data)
-        print(json.dumps({'ok': True, 'added': added, 'sourceAt': snapshot['sourceAt'], 'top3': snapshot['top3']}, ensure_ascii=False))
+        print(json.dumps({'ok': True, 'added': added, 'sourceAt': snapshot['sourceAt'], 'top2': snapshot['top2']}, ensure_ascii=False))
         return 0
     except Exception as exc:
         collector.update(state='error', error=type(exc).__name__+': '+str(exc)[:400])
@@ -177,7 +197,7 @@ def main():
         collect_once(args.fixture, args.until)
         if datetime.now(timezone.utc) >= end_at(args.until):
             return 0
-        time.sleep(max(1, args.every-time.time()%args.every+20))
+        time.sleep(max(1, args.every-(time.time()-120)%args.every))
 
 
 if __name__ == '__main__':

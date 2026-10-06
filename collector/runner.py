@@ -11,7 +11,7 @@ from collect import HISTORY, ROOT, save, utc_now
 from policy import end_at
 
 INTERVAL = 300
-OFFSET = 70  # Begin at xx:01:10, xx:06:10, ...
+OFFSET = 120  # Begin at xx:02:00, xx:07:00, xx:12:00, ...
 RETRY_SECONDS = 20
 RETRY_END_OFFSET = 240
 

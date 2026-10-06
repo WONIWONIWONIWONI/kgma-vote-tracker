@@ -27,7 +27,7 @@ class BudgetTests(unittest.TestCase):
 
     def data(self):
         snap = collect.parse_text(TEXT, NOW)
-        return {'schemaVersion': 1, 'sourceUrl': collect.URL,
+        return {'schemaVersion': 2, 'sourceUrl': collect.URL,
                 'collector': {'state': 'ok'}, 'snapshots': [snap]}
 
     def test_full_history_is_preserved_and_live_window_is_bounded(self):
