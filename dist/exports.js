@@ -30,40 +30,32 @@
     return {canvas,c,text,line,rect};
   }
   function trend(model){
-    const {canvas,c,text,line}=surface(model,730);
-    const left=108,right=950,top=202,bottom=552;
+    const {canvas,c,text,line,rect}=surface(model,1120);
+    text('현재 득표 현황',48,177,18,ink,500);
+    model.leaders.forEach((team,i)=>{
+      const top=196+i*152;
+      rect(48,top,904,138);rect(48,top,4,138,team.color);
+      text(team.rank+'위 · '+team.name,68,top+31,26,team.color,600,'left',625);
+      text('전체 투표 대비 점유율',932,top+31,12,muted,400,'right',230);
+      text(team.votes,68,top+89,52,ink,600,'left',590);
+      text(team.share,932,top+87,38,team.color,500,'right',240);
+      text(team.gap,68,top+120,14,muted,500);
+    });
+    text(model.chartTitle,48,527,22,ink,600);
+    const left=108,right=950,top=585,bottom=935;
     const x=time=>left+(time-model.xmin)/(model.xmax-model.xmin)*(right-left);
     const y=value=>bottom-(value-model.ymin)/(model.ymax-model.ymin)*(bottom-top);
-    model.series.forEach((series,i)=>text('● '+series.name,48+i*400,171,13,series.color,500,'left',370));
+    model.series.forEach((series,i)=>text('● '+series.name,48+i*400,553,13,series.color,500,'left',370));
     for(const tick of model.ticks){line(left,y(tick.value),right,y(tick.value));text(tick.label,left-14,y(tick.value)+4,12,muted,400,'right',90);}
     for(const series of model.series){
       c.beginPath();c.strokeStyle=series.color;c.lineWidth=3;let active=false;
       for(const point of series.points){if(point.value==null)continue;if(active)c.lineTo(x(point.time),y(point.value));else c.moveTo(x(point.time),y(point.value));active=true;}c.stroke();
       series.points.forEach((point,i)=>{if(point.value==null||(series.points.length>100&&i!==series.points.length-1))return;c.beginPath();c.fillStyle=series.color;c.arc(x(point.time),y(point.value),series.points.length===1?5:3,0,Math.PI*2);c.fill();});
     }
-    text(model.firstLabel,left,580,12,muted);
-    if(model.lastLabel!==model.firstLabel)text(model.lastLabel,right,580,12,muted,400,'right');
-    text(model.rangeNote,48,615,13,lime);
-    text(model.note,48,646,12,muted);
-    return canvas;
-  }
-  function leader(model){
-    const {canvas,text,rect}=surface(model,470);
-    rect(48,170,904,214);rect(48,170,4,214,model.color);
-    text('누적 득표수',73,207,14,muted);
-    text('전체 투표 대비 점유율',926,207,14,muted,400,'right');
-    text(model.votes,73,291,75,ink,600,'left',600);
-    text(model.share,926,287,51,model.color,500,'right',250);
-    text(model.gap,73,354,19,model.color,500);
-    return canvas;
-  }
-  function overview(model){
-    const {canvas,text,rect,line}=surface(model,590);
-    text('전체 투표',48,188,14,muted);text(model.total+'표',48,249,47,ink,600,'left',600);
-    text('누적 관측',952,188,14,muted,400,'right');text(model.count+'회',952,249,35,lime,500,'right',240);
-    let x=48;
-    for(const team of model.teams){const w=904*team.portion;rect(x,285,w,17,team.color);x+=w;}
-    model.teams.forEach((team,i)=>{const y=346+i*62;text('● '+team.name,48,y,17,team.color,500,'left',400);text(team.votes+'표',760,y,21,ink,500,'right',250);text(team.share,952,y,21,team.color,500,'right',160);if(i<model.teams.length-1)line(48,y+22,952,y+22);});
+    text(model.firstLabel,left,963,12,muted);
+    if(model.lastLabel!==model.firstLabel)text(model.lastLabel,right,963,12,muted,400,'right');
+    text(model.rangeNote,48,995,13,lime);
+    text(model.note,48,1024,12,muted);
     return canvas;
   }
   function pace(model){
@@ -93,6 +85,6 @@
     text('선택 날짜 전체 · 같은 눈금으로 비교 · 일부 구간은 실제 관측 시각 표시 · —는 비교 기록 부족',48,height-77,12,muted);
     return canvas;
   }
-  const painters={trend,leader,overview,pace,hourly};
+  const painters={trend,pace,hourly};
   root.KGMAImages={render(model){const painter=painters[model.type];if(!painter)throw new Error('Unknown image panel.');return painter(model);}};
 })(globalThis);

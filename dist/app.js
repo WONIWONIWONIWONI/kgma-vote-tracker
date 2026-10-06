@@ -43,10 +43,7 @@
   function windowSnapshots(){const all=state.data.snapshots;if(state.range==='all')return all;const min=Date.parse(latest().sourceAt)-Number(state.range)*3600000;return all.filter(s=>Date.parse(s.sourceAt)>=min);}
   function change(v,digits=0){return `${v>0?'+':v<0?'−':''}${digits?Math.abs(v).toFixed(digits):fmt(Math.abs(v))}`;}
   function status(){const last=latest();const capture=last.origin==='user_capture';const stale=Date.now()-Date.parse(last.sourceAt)>10*60000;const failed=state.data.collector?.state==='error';const stopped=state.data.collector?.state==='stopped'||Date.now()>=operationEnd();$('status-pill').className='status-pill '+(capture?'':stale||failed||stopped?'stale':'live');$('status-label').textContent=capture?'캡처 기록':failed?'수집 오류':stopped?'수집 종료':stale?'갱신 지연':'최근 수집 확인';$('source-time').textContent=kst(last.sourceAt);$('collected-time').textContent=last.collectedAt?`수집 ${kst(last.collectedAt,'time')}`:'';let note=capture?'첨부 화면의 실제 수치 1건입니다. 자동 수집 연결 전이며, 기록이 더 쌓이면 추이선이 표시됩니다.':failed?'최근 수집에 실패했습니다. 마지막으로 확인한 기록을 표시하며, 누락된 값은 채우지 않습니다.':stopped?'설정된 수집 기간이 끝났습니다. 마지막으로 저장된 기록을 표시합니다.':stale?'원본 집계 시각이 10분 이상 지났습니다. 아래 집계 시각의 수치를 표시합니다.':'매시 2분부터 5분 간격으로 자료를 수집합니다. (02·07·12·17분…)';if(state.loadFailed)note+=' 최신 기록 파일을 불러오지 못해 보관된 기록을 표시합니다.';$('notice-text').textContent=note;$('notice').className='notice '+(!capture&&!stale&&!failed?'good':'');}
-  function imageButton(type,label,extra=''){
-    return `<button type="button" class="quiet-button panel-image-button" data-image="${type}" ${extra} aria-label="${escapeHTML(label)}" title="${escapeHTML(label)}"><span aria-hidden="true">↓</span> 이미지</button>`;
-  }
-  function renderCards(){const last=latest();$('leaders').innerHTML=last.top2.map((t,i)=>`<article class="leader ${i===0?'first':''}" style="--color:${colorOf(t)}">${imageButton('leader',t.name+' 득표 카드 PNG 저장','data-team="'+escapeHTML(t.id)+'"')}<div class="leader-top"><span class="rank-badge"><b>${String(i+1).padStart(2,'0')}</b> RANK</span>${i===0?'<span class="mini-label">현재 선두</span>':''}</div><h2 class="artist" title="${escapeHTML(t.name)}"><i class="artist-dot"></i><span class="artist-name">${escapeHTML(t.name)}</span></h2><div class="count-row"><span class="vote-total"><strong class="vote-value">${fmt(t.votes)}</strong><span class="unit">표</span></span><span class="share-value">${displayShare(t,last)}<span>%</span></span></div><div class="leader-bottom"><span>전체 투표 중 점유율</span><b>${i===0?`2위와 ${fmt(t.votes-last.top2[1].votes)}표 차이`:`1위와 ${fmt(last.top2[0].votes-t.votes)}표 차이`}</b></div></article>`).join('');$('total-votes').textContent=fmt(last.totalVotes);$('sample-count').textContent=fmt(state.data.snapshots.length);const sum=last.top2.reduce((s,t)=>s+t.votes,0);$('top-share').textContent=(sum/last.totalVotes*100).toFixed(1)+'%';$('other-share').textContent=((last.totalVotes-sum)/last.totalVotes*100).toFixed(1)+'%';$('share-track').innerHTML=last.top2.map(t=>`<i style="width:${share(t,last)}%;background:${colorOf(t)}" title="${escapeHTML(t.name)} ${displayShare(t,last)}%"></i>`).join('')+`<i style="width:${100-sum/last.totalVotes*100}%;background:#3b4332" title="그 외"></i>`;}
+  function renderCards(){const last=latest();$('leaders').innerHTML=last.top2.map((t,i)=>`<article class="leader ${i===0?'first':''}" style="--color:${colorOf(t)}"><div class="leader-top"><span class="rank-badge"><b>${String(i+1).padStart(2,'0')}</b> RANK</span>${i===0?'<span class="mini-label">현재 선두</span>':''}</div><h2 class="artist" title="${escapeHTML(t.name)}"><i class="artist-dot"></i><span class="artist-name">${escapeHTML(t.name)}</span></h2><div class="count-row"><span class="vote-total"><strong class="vote-value">${fmt(t.votes)}</strong><span class="unit">표</span></span><span class="share-value">${displayShare(t,last)}<span>%</span></span></div><div class="leader-bottom"><span>전체 투표 중 점유율</span><b>${i===0?`2위와 ${fmt(t.votes-last.top2[1].votes)}표 차이`:`1위와 ${fmt(last.top2[0].votes-t.votes)}표 차이`}</b></div></article>`).join('');$('total-votes').textContent=fmt(last.totalVotes);$('sample-count').textContent=fmt(state.data.snapshots.length);const sum=last.top2.reduce((s,t)=>s+t.votes,0);$('top-share').textContent=(sum/last.totalVotes*100).toFixed(1)+'%';$('other-share').textContent=((last.totalVotes-sum)/last.totalVotes*100).toFixed(1)+'%';$('share-track').innerHTML=last.top2.map(t=>`<i style="width:${share(t,last)}%;background:${colorOf(t)}" title="${escapeHTML(t.name)} ${displayShare(t,last)}%"></i>`).join('')+`<i style="width:${100-sum/last.totalVotes*100}%;background:#3b4332" title="그 외"></i>`;}
   function renderPace(){const last=latest(),prev=previousObservation();$('pace-tag').textContent=prev?`${fmt((Date.parse(last.sourceAt)-Date.parse(prev.sourceAt))/60000)}분 간격`:'기록 대기';$('pace-body').innerHTML=last.top2.map(t=>{const p=prev?.top2.find(x=>x.id===t.id);const delta=p?t.votes-p.votes:null,pp=p?share(t,last)-share(p,prev):null;return `<tr><td><span class="table-artist" style="--color:${colorOf(t)}"><i></i>${escapeHTML(t.name)}</span></td><td class="${delta==null?'no-value':delta>=0?'positive':'negative'}">${delta==null?'—':change(delta)+'표'}</td><td class="${pp==null?'no-value':pp>=0?'positive':'negative'}">${pp==null?'—':change(pp,2)+'%p'}</td></tr>`;}).join('');$('pace-note').textContent=prev?`${kst(prev.sourceAt,'short')} → ${kst(last.sourceAt,'short')} · 직전 관측 대비 변화입니다. 직전 관측에서 상위 2위 밖인 팀은 비교 값이 없습니다.`:'관측 기록이 두 개 이상이면 직전 관측 대비 변화를 표시합니다. 아직 없는 값은 —로 표시합니다.';}
   function renderHistory(){const all=[...state.data.snapshots].reverse();$('history-count').textContent=`${fmt(all.length)}회 관측`;$('history-body').innerHTML=all.slice(0,state.historyLimit).map(s=>`<tr><td>${kst(s.sourceAt,'short')}${s.origin==='user_capture'?' · 캡처':''}</td>${s.top2.map(t=>`<td><span class="history-name">${escapeHTML(t.name)}</span>${fmt(t.votes)}<span class="history-name" style="display:inline;margin-left:7px">${displayShare(t,s)}%</span></td>`).join('')}<td>${fmt(s.top2[0].votes-s.top2[1].votes)}표</td></tr>`).join('');$('load-more').hidden=all.length<=state.historyLimit;}
   function renderHourly(){
@@ -176,30 +173,18 @@
   function download(blob,name){const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),10000);}
   function exportCSV(){const cells=v=>{let s=String(v??'');if(/^[=+@\-]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};const rows=[['집계시각_KST','출처','전체투표','순위','아티스트','득표수','전체대비점유율_%','표시점유율_%','1_2위표차']];for(const s of state.data.snapshots)for(const t of s.top2)rows.push([kst(s.sourceAt),s.origin,s.totalVotes,t.rank,t.name,t.votes,share(t,s).toFixed(4),displayShare(t,s),s.top2[0].votes-s.top2[1].votes]);download(new Blob(['\uFEFF'+rows.map(r=>r.map(cells).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}),'kgma-top2-history.csv');}
   async function copySummary(){const s=latest();const lines=[`[2026 KGMA] ${kst(s.sourceAt)} KST 기준`,...s.top2.map(t=>`${t.rank}위 ${t.name}: ${fmt(t.votes)}표 (${displayShare(t,s)}%)`),...gapDefs.map(g=>`${g.name} 표차: ${fmt(s.top2[g.a].votes-s.top2[g.b].votes)}표`),`총투표수 ${fmt(s.totalVotes)}표`,s.origin==='user_capture'?'첨부 화면에서 확인한 기록 · 실시간 연결 전':'Berriz 공개 투표 집계',location.protocol==='file:'?'https://berriz.in/ko/vote/2026kgma/':location.href];try{await navigator.clipboard.writeText(lines.join('\n'));toast('집계 요약을 복사했습니다.');}catch{toast('복사 권한이 없습니다. CSV 다운로드를 이용해 주세요.');}}
-  function imageModel(type,teamId){
+  function imageModel(type){
     const last=latest(),stamp=kst(last.sourceAt),suffix=stamp.replace(/[^0-9]/g,'');
     const common={type,sourceAt:stamp,filename:`kgma-${type}-${suffix}.png`};
     if(type==='trend'){
       const g=graphGeometry();
-      return {...common,title:$('chart-unit').textContent+' 추이',subtitle:$('chart-window').textContent+' KST',
+      return {...common,title:'현재 득표 현황과 추이',subtitle:'그래프 기간 · '+$('chart-window').textContent+' KST',chartTitle:$('chart-unit').textContent+' 추이',
+        leaders:last.top2.map(team=>{const other=last.top2.find(item=>item.id!==team.id);return {rank:team.rank,name:team.name,color:colorOf(team),votes:fmt(team.votes)+'표',share:displayShare(team,last)+'%',gap:other.name+'와 '+fmt(Math.abs(team.votes-other.votes))+'표 차이'};}),
         xmin:g.xmin,xmax:g.xmax,ymin:g.ymin,ymax:g.ymax,
         ticks:g.axis.ticks.map(value=>({value,label:axisLabel(value,g.axis)})),
         series:g.series.map(line=>({...line,points:g.rows.map(row=>({time:Date.parse(row.sourceAt),value:getValue(row,line)}))})),
         firstLabel:kst(g.rows[0].sourceAt,'short'),lastLabel:kst(g.rows.at(-1).sourceAt,'short'),
         rangeNote:axisRangeLabel(g),note:$('chart-note').textContent,filename:`kgma-trend-${state.metric}-${suffix}.png`};
-    }
-    if(type==='leader'){
-      const team=last.top2.find(team=>team.id===teamId);if(!team)throw new Error('This team is no longer observed.');
-      const other=last.top2.find(item=>item.id!==teamId);
-      return {...common,title:team.name+' · '+team.rank+'위',subtitle:'현재 득표 현황',color:colorOf(team),votes:fmt(team.votes)+'표',
-        share:displayShare(team,last)+'%',gap:other.name+'와 '+fmt(Math.abs(team.votes-other.votes))+'표 차이',
-        filename:`kgma-rank${team.rank}-${suffix}.png`};
-    }
-    if(type==='overview'){
-      const sum=last.top2.reduce((total,team)=>total+team.votes,0);
-      return {...common,title:'전체 투표 요약',subtitle:'전체 투표 중 상위 2팀과 그 외의 비중',total:fmt(last.totalVotes),count:fmt(state.data.snapshots.length),
-        teams:[...last.top2.map(team=>({name:team.name,votes:fmt(team.votes),share:displayShare(team,last)+'%',portion:team.votes/last.totalVotes,color:colorOf(team)})),
-          {name:'그 외',votes:fmt(last.totalVotes-sum),share:((last.totalVotes-sum)/last.totalVotes*100).toFixed(1)+'%',portion:(last.totalVotes-sum)/last.totalVotes,color:'#91a27c'}]};
     }
     if(type==='pace'){
       const prev=previousObservation();
@@ -228,7 +213,7 @@
     imagePending=true;button.disabled=true;let canvas;
     try{
       // Capture the selected data before fonts load or another update arrives.
-      const model=imageModel(button.dataset.image,button.dataset.team);
+      const model=imageModel(button.dataset.image);
       await document.fonts.ready;
       canvas=KGMAImages.render(model);
       const blob=await new Promise((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error('Empty image.')),'image/png'));

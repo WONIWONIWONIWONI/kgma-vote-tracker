@@ -76,13 +76,16 @@ try:
             assert page.locator('.gaps-panel, #gap-list').count() == 0
             assert page.locator('.hero-right #copy-button').count() == 1
             assert page.locator('.hero-right [data-image], #png-button').count() == 0
-            assert page.locator('[data-image]').count() == 6
+            assert page.locator('[data-image]').count() == 3
+            assert page.locator('.leaders [data-image],.overview-bar [data-image]').count() == 0
             assert page.locator('#history-details [data-image]').count() == 0
             refresh_box=page.locator('#refresh-button').bounding_box()
             for button in ('copy-button',):
                 box=page.locator('#'+button).bounding_box()
                 assert box['y'] >= refresh_box['y']+refresh_box['height'], (button,box,refresh_box)
                 assert box['x'] >= 0 and box['x']+box['width'] <= width
+                assert abs(box['width']-refresh_box['width'])<0.1 and abs(box['height']-refresh_box['height'])<0.1
+                assert box['width']==112 and box['height']==44
             image_positions=page.evaluate("""() => [...document.querySelectorAll('[data-image]')].map(button=>{
                 const owner=button.closest('.leader,.overview-bar,.panel'), b=button.getBoundingClientRect(),p=owner.getBoundingClientRect();
                 const labels=owner.matches('.leader')?[...owner.querySelectorAll('.artist-name,.share-value')]:[...owner.querySelectorAll('h2')];
@@ -173,13 +176,11 @@ try:
                     png_text=panel_image('trend')
                     assert page.locator('#chart-axis-note').inner_text() in png_text
                     assert all(tick in png_text for tick in page.locator('.y-tick').all_text_contents())
-                    assert '현재 득표 현황' not in png_text
-                for i,name in enumerate(('RESCENE','RIIZE')):
-                    text=panel_image('leader',i)
-                    assert any(name in value and '위' in value for value in text)
-                    assert page.locator('.vote-value').nth(i).inner_text()+'표' in text
-                text=panel_image('overview')
-                assert '100,000,000표' in text and '160회' in text
+                    assert '현재 득표 현황' in png_text
+                    for i,name in enumerate(('RESCENE','RIIZE')):
+                        assert str(i+1)+'위 · '+name in png_text
+                        assert page.locator('.vote-value').nth(i).inner_text()+'표' in png_text
+                        assert page.locator('.share-value').nth(i).inner_text() in png_text
                 text=panel_image('pace')
                 assert '+10표' in text and '+7표' in text
                 page.locator('#hourly-date').select_option(index=0)
