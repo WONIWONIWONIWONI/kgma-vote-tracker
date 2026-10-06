@@ -26,6 +26,9 @@ jobs:
       collector_ok: ${{ steps.collect.outcome }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Preserve snapshots saved after an earlier attempt of this workflow.
+          ref: main
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
