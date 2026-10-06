@@ -41,7 +41,9 @@ try:
                                           is_mobile=width<=430, device_scale_factor=1)
             context.route('https://raw.githubusercontent.com/**', lambda route: route.fulfill(
                 content_type='application/json', body=json.dumps(data)))
+            context.grant_permissions(['clipboard-read','clipboard-write'])
             page = context.new_page()
+            page.add_init_script("window.pngText=[];const original=CanvasRenderingContext2D.prototype.fillText;CanvasRenderingContext2D.prototype.fillText=function(value,...args){window.pngText.push(String(value));return original.call(this,value,...args);};")
             errors = []
             page.on('pageerror', lambda error: errors.append(str(error)))
             page.goto(f'http://127.0.0.1:{server.server_port}/', wait_until='networkidle')
@@ -61,6 +63,37 @@ try:
             assert metrics['viewport'] == width, metrics
             assert metrics['body'] <= width, metrics
             assert not metrics['overlapping'], metrics
+            assert page.locator('.gaps-panel, #gap-list').count() == 0
+            assert page.locator('.hero-right #copy-button').count() == 1
+            assert page.locator('.hero-right #png-button').count() == 1
+            refresh_box=page.locator('#refresh-button').bounding_box()
+            for button in ('copy-button','png-button'):
+                box=page.locator('#'+button).bounding_box()
+                assert box['y'] >= refresh_box['y']+refresh_box['height'], (button,box,refresh_box)
+                assert box['x'] >= 0 and box['x']+box['width'] <= width
+            assert max(metrics['panels'])-min(metrics['panels']) < 1, metrics
+            for metric in ('votes','share','gap'):
+                page.locator(f'[data-metric={metric}]').click()
+                svg=page.locator('#trend-chart')
+                assert float(svg.get_attribute('data-ymin')) > 0
+                ticks=svg.locator('.y-tick').all_text_contents()
+                assert 3 <= len(ticks) <= 8 and len(set(ticks)) == len(ticks), ticks
+                assert '자동 범위' in page.locator('#chart-axis-note').inner_text()
+                assert 'NaN' not in svg.inner_html()
+                bounds=page.evaluate('''() => {
+                    const svg=document.querySelector('#trend-chart'),width=svg.viewBox.baseVal.width;
+                    return [...svg.querySelectorAll('text')].every(el=>{
+                        const b=el.getBBox();return b.x>=-1 && b.x+b.width<=width+1;
+                    });
+                }''')
+                assert bounds, (width,metric)
+            # A short gap window has much less change and must visibly zoom in.
+            full_span=float(svg.get_attribute('data-ymax'))-float(svg.get_attribute('data-ymin'))
+            page.locator('[data-range="1"]').click()
+            zoom_span=float(svg.get_attribute('data-ymax'))-float(svg.get_attribute('data-ymin'))
+            assert zoom_span < full_span, (full_span,zoom_span)
+            page.locator('[data-range="all"]').click()
+            page.locator('[data-metric="votes"]').click()
             cards = metrics['leaders']
             assert len(cards) == 2, metrics
             assert '3위' not in page.locator('body').inner_text()
@@ -100,9 +133,15 @@ try:
                 csv=Path(download.value.path()).read_text(encoding='utf-8-sig')
                 assert len(csv.splitlines()) == 321
                 assert 'SHOWNU' not in csv and '3위표차' not in csv
+                page.locator('#copy-button').click()
+                copied=page.evaluate('navigator.clipboard.readText()')
+                assert '1위 RESCENE' in copied and '2위 RIIZE' in copied and '3위' not in copied
                 with page.expect_download() as download:
                     page.locator('#png-button').click()
                 assert Path(download.value.path()).read_bytes().startswith(b'\x89PNG')
+                png_text=page.evaluate('window.pngText')
+                assert page.locator('#chart-axis-note').inner_text() in png_text
+                assert all(tick in png_text for tick in page.locator('.y-tick').all_text_contents())
             assert not errors, errors
             context.close()
         browser.close()
