@@ -45,13 +45,13 @@ class BudgetTests(unittest.TestCase):
         data = self.data()
         collect.save(data)
         original = self.history.read_bytes()
-        with patch.object(collect, 'load_public_text', return_value=TEXT):
+        with patch.object(collect, 'load_public_snapshot', return_value=copy.deepcopy(data['snapshots'][0])):
             self.assertEqual(collect.collect_once(), 0)
         self.assertEqual(self.history.read_bytes(), original)
 
     def test_end_never_reads_the_source_and_marks_stopped(self):
         collect.save(self.data())
-        with patch.object(collect, 'load_public_text') as read:
+        with patch.object(collect, 'load_public_snapshot') as read:
             self.assertEqual(collect.collect_once(until='2000-01-01T00:00:00Z'), 0)
             read.assert_not_called()
         self.assertEqual(json.loads(self.history.read_text())['collector']['state'], 'stopped')

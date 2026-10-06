@@ -1,7 +1,7 @@
 import copy
 from datetime import datetime, timezone
 import unittest
-from collect import parse_text, append_snapshot
+from collect import parse_text, parse_api, append_snapshot
 
 TEXT = '''총 투표수
 11,195
@@ -21,6 +21,20 @@ ALPHA DRIVE ONE
 NOW = datetime(2026, 10, 6, 15, 30, tzinfo=timezone.utc)
 
 class CollectorTests(unittest.TestCase):
+    def test_public_api_matches_the_visible_page_and_sorts_candidates(self):
+        visible = parse_text(TEXT, NOW)
+        payload = {'code': '0000', 'data': {'aggregatedAt': visible['sourceAt'],
+                   'totalVotes': visible['totalVotes'], 'candidates': [
+                       {'name': t['name'], 'voteCount': t['votes'],
+                        'votePercentage': t['reportedShare']} for t in reversed(visible['top3'])]}}
+        api = parse_api(payload, NOW)
+        self.assertEqual(api['top3'], visible['top3'])
+        self.assertEqual(api['sourceAt'], visible['sourceAt'])
+        self.assertEqual(api['origin'], 'berriz_public_api')
+        payload['data']['totalVotes'] = 100
+        with self.assertRaises(ValueError):
+            parse_api(payload, NOW)
+
     def test_capture_counts_and_timezone(self):
         s = parse_text(TEXT, NOW)
         self.assertEqual(s['sourceAt'], '2026-10-06T15:15:00Z')

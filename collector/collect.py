@@ -8,10 +8,12 @@ import re
 import sys
 import time
 import unicodedata
+from urllib.request import Request, urlopen
 
 from policy import end_at, operation, MAX_RECORDS, MAX_HISTORY_BYTES
 
 URL = 'https://berriz.in/ko/vote/2026kgma/'
+STATS_URL = 'https://svc-api.berriz.in/service/v1/votes/2026kgma/stats'
 KST = timezone(timedelta(hours=9))
 ROOT = Path(__file__).resolve().parents[1]
 HISTORY = ROOT / 'dist/data/history.json'
@@ -60,36 +62,39 @@ def parse_text(text, now=None):
             'collectedAt': utc_now(), 'origin': 'berriz_public_page', 'totalVotes': total, 'top3': teams}
 
 
-def load_public_text():
-    from playwright.sync_api import sync_playwright
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(locale='ko-KR', timezone_id='Asia/Seoul')
-        page = context.new_page()
-        try:
-            response = page.goto(URL, wait_until='domcontentloaded', timeout=45000)
-            if response and response.status >= 400:
-                raise ValueError(f'공개 페이지 응답 오류: HTTP {response.status}')
-            page.wait_for_function("/총\\s*투표\\s*수/.test(document.body.innerText) && /[\\d,]+\\s*표/.test(document.body.innerText)", timeout=30000)
-            text = page.locator('body').inner_text(timeout=10000)
-            # SPA hydration can update the total and candidate cards separately.
-            try:
-                parse_text(text)
-            except ValueError:
-                page.wait_for_timeout(1500)
-                text = page.locator('body').inner_text(timeout=10000)
-            return text
-        except Exception:
-            # Public, unauthenticated page only; diagnostics stay outside dist/.
-            debug = ROOT / 'collector/debug'
-            debug.mkdir(exist_ok=True)
-            try:
-                (debug/'last-visible-text.txt').write_text(page.locator('body').inner_text(timeout=3000), encoding='utf-8')
-            except Exception:
-                pass
-            raise
-        finally:
-            browser.close()
+def parse_api(payload, now=None):
+    if not isinstance(payload, dict) or payload.get('code') != '0000':
+        raise ValueError('공개 순위 API의 성공 응답이 아닙니다.')
+    data = payload['data']
+    stamp = datetime.fromisoformat(data['aggregatedAt'].replace('Z', '+00:00'))
+    if stamp.tzinfo is None:
+        raise ValueError('원본 집계 시각에 시간대가 없습니다.')
+    total = data['totalVotes']
+    candidates = data['candidates']
+    if type(total) is not int or not isinstance(candidates, list) or len(candidates) < 3:
+        raise ValueError('공개 순위 API의 표수 형식이 올바르지 않습니다.')
+    if any(type(t.get('voteCount')) is not int or t['voteCount'] < 0 for t in candidates):
+        raise ValueError('후보 득표수 형식이 올바르지 않습니다.')
+    top = sorted(candidates, key=lambda t: -t['voteCount'])[:3]
+    # Reuse the existing cross-checks for totals, shares, ordering and timestamps.
+    lines = ['총 투표수', str(total), stamp.astimezone(KST).strftime('%Y.%m.%d %H:%M (KST)')]
+    for rank, team in enumerate(top, 1):
+        if not isinstance(team.get('name'), str) or not team['name'].strip():
+            raise ValueError('후보 이름이 없습니다.')
+        lines.extend([str(rank), team['name'], f"{team['votePercentage']}% · {team['voteCount']}표"])
+    snapshot = parse_text('\n'.join(lines), now)
+    snapshot['origin'] = 'berriz_public_api'
+    return snapshot
+
+
+def load_public_snapshot():
+    request = Request(STATS_URL, headers={'Accept': 'application/json',
+                      'Cache-Control': 'no-cache', 'Origin': 'https://berriz.in'})
+    with urlopen(request, timeout=15) as response:
+        body = response.read(1024 * 1024 + 1)
+        if len(body) > 1024 * 1024:
+            raise ValueError('공개 순위 응답이 예상 크기를 초과했습니다.')
+    return parse_api(json.loads(body))
 
 
 def append_snapshot(data, snapshot):
@@ -144,14 +149,7 @@ def collect_once(fixture=None, until=None):
         print('Configured collection end reached.')
         return 0
     try:
-        text = Path(fixture).read_text(encoding='utf-8') if fixture else load_public_text()
-        try:
-            snapshot = parse_text(text)
-        except ValueError:
-            debug = ROOT / 'collector/debug'
-            debug.mkdir(exist_ok=True)
-            (debug/'last-visible-text.txt').write_text(text, encoding='utf-8')
-            raise
+        snapshot = parse_text(Path(fixture).read_text(encoding='utf-8')) if fixture else load_public_snapshot()
         added = append_snapshot(data, snapshot)
         collector.update(state='ok', lastSuccessAt=utc_now(), error=None)
         if added or previous_state != 'ok' or needs_format_update:

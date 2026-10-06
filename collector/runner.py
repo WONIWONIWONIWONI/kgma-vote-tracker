@@ -11,7 +11,9 @@ from collect import HISTORY, ROOT, save, utc_now
 from policy import end_at
 
 INTERVAL = 300
-OFFSET = 90  # Give the source time to update after each five-minute boundary.
+OFFSET = 70  # Begin at xx:01:10, xx:06:10, ...
+RETRY_SECONDS = 20
+RETRY_END_OFFSET = 240
 
 
 def next_tick(now):
@@ -56,7 +58,11 @@ def run_cycle():
     data = json.loads(HISTORY.read_text(encoding='utf-8'))
     if data.get('collector', {}).get('state') == 'stopped':
         return 'stopped'
-    return 'ok' if code == 0 else 'error'
+    if code != 0:
+        return 'error'
+    expected = math.floor((time.time() - OFFSET) / INTERVAL) * INTERVAL
+    observed = datetime.fromisoformat(data['snapshots'][-1]['sourceAt'].replace('Z', '+00:00')).timestamp()
+    return 'waiting' if observed < expected else 'ok'
 
 
 def run_for(seconds, cycle=run_cycle, clock=time.time, monotonic=time.monotonic,
@@ -70,7 +76,9 @@ def run_for(seconds, cycle=run_cycle, clock=time.time, monotonic=time.monotonic,
             return 0
         if failures >= 3:
             raise RuntimeError('Three collections failed; the queued job can restart fresh.')
-        tick = next_tick(clock())
+        now = clock()
+        retry_end = math.floor((now - OFFSET) / INTERVAL) * INTERVAL + RETRY_END_OFFSET
+        tick = min(now + RETRY_SECONDS, retry_end) if state in ('waiting', 'error') and now < retry_end else next_tick(now)
         print('Next check: ' + datetime.fromtimestamp(tick, timezone.utc).isoformat(), flush=True)
         # Short waits keep cancellation responsive and respect the job's lifetime.
         while clock() < tick and monotonic() < deadline:

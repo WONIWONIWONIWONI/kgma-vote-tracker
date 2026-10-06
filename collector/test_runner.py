@@ -5,7 +5,7 @@ from runner import run_for
 
 class Clock:
     def __init__(self):
-        self.now = 90.0
+        self.now = 70.0
 
     def read(self):
         return self.now
@@ -25,7 +25,7 @@ class RunnerTests(unittest.TestCase):
             return 'ok'
 
         run_for(901, cycle, clock.read, clock.read, clock.sleep)
-        self.assertEqual(starts, [90, 390, 690, 990])
+        self.assertEqual(starts, [70, 370, 670, 970])
 
     def test_one_failure_does_not_stop_the_next_collection(self):
         clock = Clock()
@@ -37,18 +37,42 @@ class RunnerTests(unittest.TestCase):
             return 'error' if len(starts) == 1 else 'ok'
 
         run_for(601, cycle, clock.read, clock.read, clock.sleep)
-        self.assertEqual(starts, [90, 390, 690])
+        self.assertEqual(starts, [70, 93, 370, 670])
 
     def test_stopped_source_exits_without_waiting(self):
         clock = Clock()
         self.assertEqual(run_for(1000, lambda: 'stopped', clock.read,
                                  clock.read, clock.sleep), 0)
-        self.assertEqual(clock.now, 90)
+        self.assertEqual(clock.now, 70)
+
+    def test_waiting_for_public_update_retries_without_waiting_five_minutes(self):
+        clock = Clock()
+        starts = []
+
+        def cycle():
+            starts.append(clock.now)
+            return 'waiting' if len(starts) < 3 else 'ok'
+
+        run_for(301, cycle, clock.read, clock.read, clock.sleep)
+        self.assertEqual(starts, [70, 90, 110, 370])
+
+    def test_waiting_retries_are_bounded_within_the_update_window(self):
+        clock = Clock()
+        starts = []
+
+        def cycle():
+            starts.append(clock.now)
+            return 'waiting'
+
+        run_for(301, cycle, clock.read, clock.read, clock.sleep)
+        self.assertIn(240, starts)
+        self.assertNotIn(260, starts)
+        self.assertEqual(starts[-1], 370)
 
     def test_deadline_is_respected_during_wait(self):
         clock = Clock()
         run_for(5, lambda: 'ok', clock.read, clock.read, clock.sleep)
-        self.assertEqual(clock.now, 95)
+        self.assertEqual(clock.now, 75)
 
 
 if __name__ == '__main__':

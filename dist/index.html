@@ -7,9 +7,9 @@
   <title>KGMA TOP 3 — 투표 트래커</title>
   <meta name="description" content="2026 KGMA 상위 3팀의 득표수, 점유율, 표차와 시간별 변화를 한눈에.">
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./style.css?v=20261007-mobile">
   <script src="./data/seed.js"></script>
-  <script src="./app.js?v=20261007-efficient" defer></script>
+  <script src="./app.js?v=20261007-mobile-live" defer></script>
 </head>
 <body>
   <div class="site-shell">
@@ -20,7 +20,7 @@
     <main>
       <div class="hero">
         <div><div class="eyebrow"><span class="eyebrow-line"></span>BERRIZ GLOBAL FANS’ CHOICE</div><h1>지금, 선두의 흐름.</h1><p class="hero-copy">상위 3팀의 득표와 격차를 한눈에.</p></div>
-        <div class="hero-right"><div class="status-pill" id="status-pill"><span class="status-dot"></span><span id="status-label">기록 불러오는 중</span></div><p class="source-time" id="source-time">—</p><span class="time-hint">원본 집계 시각 · KST</span></div>
+        <div class="hero-right"><div class="status-pill" id="status-pill"><span class="status-dot"></span><span id="status-label">기록 불러오는 중</span></div><p class="source-time" id="source-time">—</p><span class="time-hint">원본 집계 시각 · KST</span><div class="source-controls"><span id="collected-time" class="time-hint"></span><button class="quiet-button" id="refresh-button"><span aria-hidden="true">↻</span> 새로고침</button></div></div>
       </div>
       <div class="notice" id="notice" role="status"><span class="notice-mark">i</span><span id="notice-text">저장된 투표 집계 기록을 불러오는 중입니다.</span></div>
       <section class="leaders" id="leaders" aria-label="현재 상위 3팀"></section>
@@ -35,9 +35,12 @@
         <section class="panel gaps-panel" aria-labelledby="gap-title"><div class="panel-heading compact"><div><div class="section-kicker">THE DISTANCE</div><h2 id="gap-title">순위 사이의 거리</h2></div><span class="panel-tag">현재 표차</span></div><div id="gap-list"></div><p class="panel-footnote">같은 집계 시점의 득표수를 비교합니다.</p></section>
         <section class="panel activity-panel" aria-labelledby="recent-title"><div class="panel-heading compact"><div><div class="section-kicker">THE PACE</div><h2 id="recent-title">직전 관측 대비 움직임</h2></div><span class="panel-tag" id="pace-tag">기록 대기</span></div><div class="table-scroll"><table><thead><tr><th scope="col">아티스트</th><th scope="col">표수 변화</th><th scope="col">점유율 변화</th></tr></thead><tbody id="pace-body"></tbody></table></div><p class="panel-footnote" id="pace-note"></p></section>
       </div>
-      <section class="panel history-panel" aria-labelledby="history-title"><div class="panel-heading compact"><div><div class="section-kicker">THE RECORD</div><h2 id="history-title">집계 기록</h2></div><div class="history-actions"><button class="quiet-button" id="refresh-button"><span aria-hidden="true">↻</span> 새로고침</button><button class="quiet-button" id="csv-button"><span aria-hidden="true">↓</span> CSV</button></div></div><div class="table-scroll"><table class="history-table"><thead><tr><th scope="col">집계 시각 (KST)</th><th scope="col">1위 · 득표수</th><th scope="col">2위 · 득표수</th><th scope="col">3위 · 득표수</th><th scope="col">1–2위 표차</th></tr></thead><tbody id="history-body"></tbody></table></div><button class="load-more" id="load-more" hidden>기록 더 보기</button></section>
+      <details class="panel history-panel" id="history-details">
+        <summary class="history-summary"><span><span class="section-kicker">THE RECORD</span><span class="history-title" id="history-title">집계 기록 <small id="history-count"></small></span></span><span class="history-toggle"><span id="history-toggle-label">펼치기</span><span class="history-chevron" aria-hidden="true">⌄</span></span></summary>
+        <div class="history-content"><div class="history-toolbar"><p>최신 기록부터 표시합니다.</p><button class="quiet-button" id="csv-button"><span aria-hidden="true">↓</span> 전체 CSV</button></div><div class="table-scroll history-scroll" tabindex="0" aria-label="집계 기록 표 · 가로 세로 스크롤"><table class="history-table"><thead><tr><th scope="col">집계 시각 (KST)</th><th scope="col">1위 · 득표수</th><th scope="col">2위 · 득표수</th><th scope="col">3위 · 득표수</th><th scope="col">1–2위 표차</th></tr></thead><tbody id="history-body"></tbody></table></div><button class="load-more" id="load-more" hidden>기록 12개 더 보기</button></div>
+      </details>
       <div class="share-row"><p>같이 보고, 함께 응원해요.</p><div><button class="quiet-button" id="copy-button">요약 복사</button><button class="quiet-button" id="png-button">그래프 PNG 저장 <span aria-hidden="true">↗</span></button></div></div>
-      <details class="method"><summary>수치와 그래프는 어떻게 읽나요?<span aria-hidden="true">＋</span></summary><div><p>점유율은 해당 팀의 득표수를 <b>전체 투표수</b>로 나눈 값입니다. 카드에는 원본에 표시된 소수 첫째 자리 점유율을 표시합니다. 표차는 1–2위, 2–3위, 1–3위의 득표수 차이입니다.</p><p>득표수·점유율 그래프는 현재 상위 3팀을 팀 이름별로 추적합니다. 과거에 상위 3위 밖에 있던 팀은 해당 시점의 관측점이 없습니다. 표차 그래프는 각 시점의 1·2·3위를 비교하므로 팀이 바뀔 수 있습니다. 미관측 구간도 앞뒤 관측점을 직선으로 연결합니다. 선 중간의 값은 실제 관측값이 아니며, 툴팁과 CSV에는 관측 기록만 표시합니다.</p><p>변화량은 가장 최근 기록과 바로 직전 관측 기록을 비교합니다. 관측 간격이 5분보다 길어도 그 전체 구간의 변화를 보여 주며, 실제 비교 간격과 시각을 함께 표시합니다. 실행 중인 수집기가 5분마다 확인하고 화면은 5분마다 최근 기록만 읽고, 최초 접속이나 오래 자리를 비운 뒤에는 전체 기록을 한 번 불러옵니다. 2026년 10월 21일 00:45(KST)에 수집과 자동 새로고침을 종료합니다. 원본 갱신과 작업 교대 시 지연될 수 있으므로 실제 집계 시각을 확인해 주세요.</p></div></details>
+      <details class="method"><summary>수치와 그래프는 어떻게 읽나요?<span aria-hidden="true">＋</span></summary><div><p>점유율은 해당 팀의 득표수를 <b>전체 투표수</b>로 나눈 값입니다. 카드에는 원본에 표시된 소수 첫째 자리 점유율을 표시합니다. 표차는 1–2위, 2–3위, 1–3위의 득표수 차이입니다.</p><p>득표수·점유율 그래프는 현재 상위 3팀을 팀 이름별로 추적합니다. 과거에 상위 3위 밖에 있던 팀은 해당 시점의 관측점이 없습니다. 표차 그래프는 각 시점의 1·2·3위를 비교하므로 팀이 바뀔 수 있습니다. 미관측 구간도 앞뒤 관측점을 직선으로 연결합니다. 선 중간의 값은 실제 관측값이 아니며, 툴팁과 CSV에는 관측 기록만 표시합니다.</p><p>변화량은 가장 최근 기록과 바로 직전 관측 기록을 비교합니다. 관측 간격이 5분보다 길어도 그 전체 구간의 변화를 보여 주며, 실제 비교 간격과 시각을 함께 표시합니다. 수집기는 베리즈의 공개 순위 API를 매시 01·06·11분대부터 확인합니다. 새 집계가 아직 없으면 20초 간격으로 짧게 재확인하고, 화면도 갱신 대기 중에는 최근 3건만 다시 읽습니다. 최초 접속이나 오래 자리를 비운 뒤에는 전체 기록을 한 번 불러옵니다. 2026년 10월 21일 00:45(KST)에 수집과 자동 새로고침을 종료합니다. 원본 갱신과 작업 교대 시 지연될 수 있으므로 실제 집계 시각을 확인해 주세요.</p></div></details>
     </main>
     <footer><span class="footer-brand">VOTE/TRACK</span><p>팬이 만든 비공식 대시보드 · 데이터 출처 <a href="https://berriz.in/ko/vote/2026kgma/" target="_blank" rel="noopener noreferrer">Berriz ↗</a></p><span>모든 시각은 한국 시간 (KST)</span></footer>
   </div><div class="toast" role="status" id="toast" hidden></div>
