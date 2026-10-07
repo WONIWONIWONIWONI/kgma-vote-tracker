@@ -16,7 +16,7 @@
     '30': { min: 30, label: '30분봉', show: 48 },
     '60': { min: 60, label: '1시간봉', show: 48 }
   };
-  var FONT = '-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif';
+  var FONT = 'DM Sans,Noto Sans KR,Apple SD Gothic Neo,Malgun Gothic,sans-serif';
 
   var state = { tf: '30', offset: 0, map: {}, points: [], candles: [], base: null, endsAt: null, lastFull: 0, view: null, hover: -1 };
   var root, el = {};
@@ -88,7 +88,7 @@
   /* ===== 그래프 그리기 (SVG 조각 문자열) ===== */
   function chartInner(W, H, v, hover) {
     var m = v.m, ph = H - m.t - m.b, vis = v.vis, s = [];
-    var slot = v.plotW / Math.max(vis.length, 12);
+    var slot = v.plotW / Math.max(vis.length, 30);
     var lo = Infinity, hi = -Infinity;
     vis.forEach(function (c) { if (c.l < lo) lo = c.l; if (c.h > hi) hi = c.h; });
     if (!vis.length) { lo = 0; hi = 10; }
@@ -98,29 +98,29 @@
 
     niceTicks(lo, hi, H < 300 ? 4 : 5).forEach(function (t) {
       var y = f1(Y(t));
-      s.push('<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + y + '" y2="' + y + '" stroke="rgba(255,255,255,0.09)" stroke-width="1"/>');
-      s.push('<text x="' + (m.l - 8) + '" y="' + (y + 4) + '" text-anchor="end" font-size="11" fill="#9aa093" font-family=\'' + FONT + '\'>' + num(t) + '</text>');
+      s.push('<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + y + '" y2="' + y + '" stroke="#30362a" stroke-dasharray="2 4" stroke-width="1"/>');
+      s.push('<text x="' + (m.l - 8) + '" y="' + (y + 4) + '" text-anchor="end" font-size="10" fill="#979f8e" font-family=\'' + FONT + '\'>' + num(t) + '</text>');
     });
 
     var size = FRAMES[state.tf].min * 60000;
-    var steps = [1, 2, 3, 4, 6, 12], want = Math.ceil(64 / slot), k = 12;
+    var steps = state.tf === '5' ? [3, 6, 12, 24] : state.tf === '30' ? [2, 4, 6, 12] : [1, 2, 3, 4, 6, 12], want = Math.ceil(42 / slot), k = steps[steps.length - 1];
     for (var q = 0; q < steps.length; q++) { if (steps[q] >= want) { k = steps[q]; break; } }
     var lastDay = -1;
     vis.forEach(function (c, i) {
       var cx = m.l + slot * (i + 0.5);
-      if (i === hover) s.push('<rect x="' + f1(cx - slot / 2) + '" y="' + m.t + '" width="' + f1(slot) + '" height="' + ph + '" fill="rgba(255,255,255,0.07)"/>');
+      if (i === hover) s.push('<rect x="' + f1(cx - slot / 2) + '" y="' + m.t + '" width="' + f1(slot) + '" height="' + ph + '" fill="#ffffff0f"/>');
       if (Math.round(c.t / size) % k === 0) {
         var day = kst(c.t).D;
-        s.push('<text x="' + f1(cx) + '" y="' + (H - m.b + 16) + '" text-anchor="middle" font-size="11" fill="#9aa093" font-family=\'' + FONT + '\'>' + hm(c.t) + '</text>');
+        s.push('<text x="' + f1(cx) + '" y="' + (H - m.b + 16) + '" text-anchor="middle" font-size="10" fill="#979f8e" font-family=\'' + FONT + '\'>' + hm(c.t) + '</text>');
         if (day !== lastDay) {
-          s.push('<text x="' + f1(cx) + '" y="' + (H - m.b + 30) + '" text-anchor="middle" font-size="10" fill="#7d8478" font-family=\'' + FONT + '\'>' + md(c.t) + '</text>');
+          s.push('<text x="' + f1(cx) + '" y="' + (H - m.b + 30) + '" text-anchor="middle" font-size="9" fill="#79816f" font-family=\'' + FONT + '\'>' + md(c.t) + '</text>');
           lastDay = day;
         }
       }
     });
 
     vis.forEach(function (c, i) {
-      var cx = m.l + slot * (i + 0.5), bw = Math.max(2, Math.min(18, slot * 0.62));
+      var cx = m.l + slot * (i + 0.5), bw = state.tf === '5' ? Math.max(2, Math.min(18, slot * 0.62)) : Math.max(2, slot - Math.max(1, slot * 0.08));
       var col = c.c > c.o ? UP_COLOR : c.c < c.o ? DOWN_COLOR : FLAT_COLOR, op = c.gapped ? 0.5 : 1;
       var yo = Y(c.o), yc = Y(c.c);
       s.push('<line x1="' + f1(cx) + '" x2="' + f1(cx) + '" y1="' + f1(Y(c.h)) + '" y2="' + f1(Y(c.l)) + '" stroke="' + col + '" stroke-width="1.4" opacity="' + op + '"/>');
@@ -129,8 +129,8 @@
 
     if (vis.length && v.end === state.candles.length) {
       var lc = vis[vis.length - 1], ly = f1(Y(lc.c));
-      s.push('<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + ly + '" y2="' + ly + '" stroke="rgba(255,255,255,0.35)" stroke-dasharray="3 4"/>');
-      s.push('<text x="' + (m.l + 4) + '" y="' + (ly - 5) + '" text-anchor="start" font-size="11" fill="#e6e9df" font-family=\'' + FONT + '\'>현재 ' + num(lc.c) + '</text>');
+      s.push('<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + ly + '" y2="' + ly + '" stroke="#c2ee64" stroke-opacity="0.5" stroke-dasharray="3 4"/>');
+      s.push('<text x="' + (m.l + 4) + '" y="' + (ly - 5) + '" text-anchor="start" font-size="10" fill="#c2ee64" font-family=\'' + FONT + '\'>현재 ' + num(lc.c) + '</text>');
     }
     v.slot = slot;
     return s.join('');
@@ -172,13 +172,14 @@
     var size = FRAMES[state.tf].min * 60000, last = state.candles[state.candles.length - 1] === c;
     var title = state.tf === '5' ? md(c.t) + ' ' + hm(c.t) + ' 집계' : md(c.t) + ' ' + hm(c.t) + '–' + hm(c.t + size) + ' · ' + FRAMES[state.tf].label;
     var d = c.c - c.o, col = d > 0 ? UP_COLOR : d < 0 ? DOWN_COLOR : FLAT_COLOR;
-    var h = '<b>' + esc(title) + '</b><br>시가 ' + num(c.o) + ' · 종가 ' + num(c.c) + '<br>고가 ' + num(c.h) + ' · 저가 ' + num(c.l) +
-      '<br>표차 변화 <b style="color:' + col + '">' + signed(d) + '</b>' +
-      '<br>' + esc(c.lead) + ' ' + num(c.a) + ' vs ' + esc(c.second) + ' ' + num(c.b) +
-      '<br><span class="cd-dim">관측 ' + c.n + '회';
+    function row(l, val) { return '<p><span>' + l + '</span><b>' + val + '</b></p>'; }
+    var h = '<strong>' + esc(title) + '</strong>' + row('시가', num(c.o)) + row('고가', num(c.h)) + row('저가', num(c.l)) + row('종가', num(c.c)) +
+      '<p><span>표차 변화</span><b style="color:' + col + '">' + signed(d) + '</b></p>' +
+      '<p><span>' + esc(c.lead) + '</span><b>' + num(c.a) + '</b></p><p><span>' + esc(c.second) + '</span><b>' + num(c.b) + '</b></p>' +
+      '<div class="cd-dim">관측 ' + c.n + '회';
     if (c.gapped) h += ' · 직전 관측과 ' + c.gapMin + '분 간격';
     if (last && state.tf !== '5' && c.t + size - c.lastT > 5 * 60000) h += ' · 집계 중';
-    h += '</span>';
+    h += '</div>';
     el.tip.innerHTML = h;
     el.tip.hidden = false;
     var cx = (v.m.l + v.slot * (i + 0.5)) * (el.svg.getBoundingClientRect().width / v.W);
@@ -288,20 +289,29 @@
   function injectStyle() {
     var st = document.createElement('style');
     st.textContent =
-      '.cd-tf{display:inline-flex;gap:4px;flex-wrap:wrap}' +
-      '.cd-tf button,.cd-nav button{font:inherit;font-size:13px;color:inherit;background:transparent;border:1px solid rgba(255,255,255,.2);border-radius:999px;padding:7px 14px;min-height:36px;cursor:pointer}' +
-      '.cd-tf button.selected{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.45)}' +
+      '.cd-panel{margin-top:18px;padding:26px 27px 16px}' +
+      '.cd-tf{display:flex;gap:4px;background:#11150f;padding:4px;border-radius:7px;border:1px solid #2a3024}' +
+      '.cd-tf button{border:0;background:none;color:var(--muted);font-size:11px;border-radius:4px;padding:7px 11px}' +
+      '.cd-tf button.selected{background:#333c27;color:var(--lime)}' +
+      '.cd-controls{margin-top:22px;border-bottom:1px solid var(--line);padding-bottom:12px}' +
+      '.cd-legend{display:flex;gap:16px;flex-wrap:wrap}' +
+      '.cd-legend span{display:flex;align-items:center;gap:6px;color:#c0c8b5;font-size:10px}' +
+      '.cd-legend i{display:inline-block;width:7px;height:7px;border-radius:2px}' +
+      '.cd-wrap{position:relative;margin-top:16px}' +
+      '.cd-unit{display:block;font-size:10px;color:var(--muted);padding:3px 0 2px;margin-bottom:10px}' +
+      '.cd-wrap svg{display:block;width:100%;height:auto;overflow:visible;touch-action:pan-y;user-select:none;-webkit-user-select:none}' +
+      '.cd-nav{display:flex;gap:8px;margin:12px 0 14px}' +
       '.cd-nav button:disabled{opacity:.35;cursor:default}' +
-      '.cd-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;opacity:.85;margin:6px 0 2px}' +
-      '.cd-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}' +
-      '.cd-wrap{position:relative;margin-top:8px}' +
-      '.cd-wrap svg{display:block;width:100%;height:auto;touch-action:pan-y;user-select:none;-webkit-user-select:none}' +
-      '.cd-meta{display:flex;justify-content:space-between;font-size:12px;opacity:.7;margin-bottom:2px}' +
-      '.cd-tip{position:absolute;z-index:5;pointer-events:none;background:#1b1e18;border:1px solid rgba(255,255,255,.2);border-radius:10px;padding:9px 12px;font-size:12.5px;line-height:1.55;white-space:nowrap;font-variant-numeric:tabular-nums;box-shadow:0 6px 20px rgba(0,0,0,.4)}' +
-      '.cd-tip[hidden]{display:none}.cd-dim{opacity:.65}' +
-      '.cd-nav{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}' +
-      '.cd-range{font-size:12.5px;opacity:.75;margin-left:auto}' +
-      '.cd-empty{padding:40px 0;text-align:center;opacity:.7;font-size:14px}';
+      '.cd-bottom{display:flex;justify-content:space-between;gap:15px;border-top:1px solid var(--line);padding-top:12px;font-size:10px;color:var(--muted);line-height:1.6}' +
+      '.cd-bottom p{margin:0}.cd-bottom>span{flex-shrink:0;font-variant-numeric:tabular-nums}' +
+      '.cd-tip{position:absolute;z-index:5;pointer-events:none;background:#11160ff2;box-shadow:0 5px 22px #0006;border:1px solid #536244;padding:11px 13px;border-radius:7px;font-size:11px;min-width:160px;white-space:nowrap;font-variant-numeric:tabular-nums}' +
+      '.cd-tip[hidden]{display:none}' +
+      '.cd-tip>strong{display:block;font-size:10px;color:var(--muted);margin-bottom:8px;font-weight:600}' +
+      '.cd-tip p{margin:5px 0;display:flex;align-items:center;justify-content:space-between;gap:18px}' +
+      '.cd-tip b{font-weight:500}.cd-dim{font-size:10px;color:var(--muted);margin-top:8px}' +
+      '.cd-empty{padding:40px 0;text-align:center;color:var(--muted);font-size:12px}' +
+      '@media(max-width:900px){.cd-panel>.panel-heading{flex-wrap:wrap;align-items:flex-start}.cd-tf{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:3px}.cd-tf button{padding:8px 4px;font-size:10px}}' +
+      '@media(max-width:760px){.cd-panel{padding:19px 16px 14px}.cd-controls{margin-top:20px}.cd-bottom{display:block}.cd-bottom>span{display:block;margin-top:7px}.cd-tip{font-size:10px;min-width:145px}}';
     document.head.appendChild(st);
   }
   function build() {
@@ -311,18 +321,19 @@
       if (!anchor || !anchor.parentNode) return false;
       root = document.createElement('section');
       root.id = 'candle-panel';
-      root.className = 'panel has-image-button';
+      root.className = 'panel has-image-button cd-panel';
       anchor.parentNode.insertBefore(root, anchor.nextSibling);
     }
+    if (root.className.indexOf('cd-panel') < 0) root.className += ' cd-panel';
     injectStyle();
     root.innerHTML =
       '<button type="button" class="quiet-button panel-image-button" id="cd-image" aria-label="표차 캔들차트 PNG 저장" title="표차 캔들차트 PNG 저장"><span aria-hidden="true">↓</span> 이미지</button>' +
       '<div class="panel-heading"><div><div class="section-kicker">THE CANDLES</div><h2 id="cd-title">표차 캔들차트</h2></div>' +
       '<div class="cd-tf" role="group" aria-label="봉 간격" id="cd-tf"><button data-tf="5">5분</button><button data-tf="30" class="selected" aria-pressed="true">30분</button><button data-tf="60">1시간</button></div></div>' +
-      '<div class="cd-legend"><span><i style="background:' + UP_COLOR + '"></i>표차 확대 (1위가 더 앞서감)</span><span><i style="background:' + DOWN_COLOR + '"></i>표차 축소 (2위가 따라잡음)</span><span><i style="background:' + FLAT_COLOR + ';opacity:.5"></i>옅은 봉 = 관측 공백 뒤</span></div>' +
-      '<div class="cd-wrap" id="cd-wrap"><div class="cd-meta"><span id="cd-unit"></span></div><svg id="cd-svg" role="img" aria-label="1위와 2위 표차의 캔들차트"></svg><div class="cd-tip" id="cd-tip" role="status" hidden></div></div>' +
-      '<div class="cd-nav"><button id="cd-prev" type="button">◀ 이전</button><button id="cd-next" type="button">다음 ▶</button><button id="cd-latest" type="button">최신</button><span class="cd-range" id="cd-range"></span></div>' +
-      '<p class="panel-footnote">표차 = 1위 − 2위 득표수. 봉 하나는 그 시간 동안 표차가 어떻게 움직였는지를 보여줘요. 몸통은 시가(직전 관측 표차)에서 종가(구간 마지막 표차)까지, 위·아래 선은 구간 중 최고·최저예요. 5분봉은 관측이 5분에 한 번이라 선 없이 몸통만 보일 수 있어요. 관측이 빠진 구간은 앞뒤 값만 이어 보여주며 임의로 채우지 않아요.</p>';
+      '<div class="cd-controls"><div class="cd-legend"><span><i style="background:' + UP_COLOR + '"></i>표차 확대</span><span><i style="background:' + DOWN_COLOR + '"></i>표차 축소</span><span><i style="background:' + FLAT_COLOR + ';opacity:.5"></i>관측 공백 뒤</span></div></div>' +
+      '<div class="cd-wrap" id="cd-wrap"><span class="cd-unit" id="cd-unit"></span><svg id="cd-svg" role="img" aria-label="1위와 2위 표차의 캔들차트"></svg><div class="cd-tip" id="cd-tip" role="status" hidden></div></div>' +
+      '<div class="cd-nav"><button class="quiet-button" id="cd-prev" type="button">◀ 이전</button><button class="quiet-button" id="cd-next" type="button">다음 ▶</button><button class="quiet-button" id="cd-latest" type="button">최신</button></div>' +
+      '<div class="cd-bottom"><p>표차 = 1위 − 2위 득표수. 몸통은 시가(직전 관측 표차)에서 종가(구간 마지막 표차)까지, 위·아래 선은 구간 중 최고·최저예요. 관측이 빠진 구간은 임의로 채우지 않아요.</p><span id="cd-range"></span></div>';
     el.wrap = root.querySelector('#cd-wrap'); el.svg = root.querySelector('#cd-svg'); el.tip = root.querySelector('#cd-tip');
     el.unit = root.querySelector('#cd-unit'); el.range = root.querySelector('#cd-range'); el.tf = root.querySelector('#cd-tf');
     el.prev = root.querySelector('#cd-prev'); el.next = root.querySelector('#cd-next'); el.latest = root.querySelector('#cd-latest');
