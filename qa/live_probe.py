@@ -1,7 +1,8 @@
-"""Verify the deployed mobile dashboard against the public record feed."""
+"""Verify the deployed mobile dashboard against the public record feed and UI assets."""
 from datetime import datetime
 import json
 from pathlib import Path
+import struct
 import sys
 from urllib.parse import urlsplit
 
@@ -64,10 +65,48 @@ with sync_playwright() as p:
     assert metrics['notice'].startswith('매시 2분부터 5분 간격으로 자료를 수집합니다.'), metrics
     assert '3위' not in page.locator('body').inner_text()
     assert len({(c['width'], c['height']) for c in metrics['cards']}) == 1, metrics
+    refresh = page.locator('#refresh-button').bounding_box()
+    copy = page.locator('#copy-button').bounding_box()
+    assert refresh and copy, 'Refresh/copy buttons missing from deployed page'
+    assert refresh['width'] == 112 and refresh['height'] == 44, refresh
+    assert copy['width'] == 112 and copy['height'] == 44, copy
+    assert page.locator('[data-image]').count() == 3, 'Expected three panel image controls'
+    page.add_init_script("""window.probePngText=[];
+      const original=CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText=function(value,...args){
+        window.probePngText.push(String(value));return original.call(this,value,...args);
+      };""")
+    for metric in ('votes', 'share', 'gap'):
+        page.locator(f'[data-metric="{metric}"]').click()
+        expected_text = page.evaluate("""() => {
+          const names=['RESCENE','RIIZE'];
+          return [...document.querySelectorAll('.leader')].map((card,i)=>({
+            label:(i+1)+'위 · '+names[i],
+            votes:card.querySelector('.vote-value').innerText+'표',
+            share:card.querySelector('.share-value').innerText
+          }));
+        }""")
+        page.evaluate('window.probePngText=[]')
+        with page.expect_download() as image_download:
+            page.locator('[data-image="trend"]').click()
+        download = image_download.value
+        image_path = Path(download.path())
+        image = image_path.read_bytes()
+        assert image.startswith(b'\\x89PNG\\r\\n\\x1a\\n'), 'Chart export is not a PNG'
+        width, height = struct.unpack('>II', image[16:24])
+        assert 0 < width <= 4096 and 0 < height <= 4096 and width*height <= 8000000, (width, height)
+        png_text = page.evaluate('window.probePngText')
+        assert '현재 득표 현황' in png_text, png_text
+        for card in expected_text:
+            assert card['label'] in png_text, (metric, card, png_text)
+            assert card['votes'] in png_text, (metric, card, png_text)
+            assert card['share'] in png_text, (metric, card, png_text)
+        emit('PUBLIC_PNG', {'metric':metric, 'bytes':len(image), 'width':width,
+                            'height':height, 'teamCards':len(expected_text)})
     page.locator('.history-summary').click()
     assert page.locator('#history-body').is_visible()
     page.locator('.history-summary').click()
     assert not page.locator('#history-body').is_visible()
-    emit('RESULT', 'PASS: top-two data, minute-two notice, hourly gains, mobile cards, collapsed history')
+    emit('RESULT', 'PASS: public refresh, 112x44 controls, and downloadable vote/share/gap charts with both team cards')
     context.close()
     browser.close()
