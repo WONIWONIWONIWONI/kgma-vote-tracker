@@ -18,7 +18,7 @@
   };
   var FONT = 'DM Sans,Noto Sans KR,Apple SD Gothic Neo,Malgun Gothic,sans-serif';
 
-  var state = { touch: false, tf: '30', offset: 0, map: {}, points: [], candles: [], base: null, endsAt: null, lastFull: 0, view: null, hover: -1 };
+  var state = { touch: false, tf: '30', offset: 0, zoom: { '5': 96, '30': 48, '60': 48 }, map: {}, points: [], candles: [], base: null, endsAt: null, lastFull: 0, view: null, hover: -1 };
   var root, el = {};
 
   /* ===== 작은 도구들 ===== */
@@ -75,14 +75,43 @@
 
   /* ===== 화면에 보일 범위 계산 ===== */
   function margins(W) { return { l: W < 520 ? 44 : 62, r: 8, t: 14, b: 40 }; }
+  function zoomLimits(W) {
+    var max = Math.max(20, Math.min(180, state.candles.length || 180));
+    var min = W < 520 ? 12 : 16;
+    return { min: min, max: max };
+  }
   function computeView(W) {
-    var m = margins(W), plotW = W - m.l - m.r;
-    var n = Math.min(FRAMES[state.tf].show, Math.max(10, Math.floor(plotW / 4)));
+    var m = margins(W), plotW = W - m.l - m.r, lim = zoomLimits(W);
+    var wanted = state.zoom[state.tf] || FRAMES[state.tf].show;
+    wanted = Math.max(lim.min, Math.min(lim.max, wanted));
+    state.zoom[state.tf] = wanted;
+    var n = Math.min(wanted, state.candles.length || wanted);
     var all = state.candles, maxOff = Math.max(0, all.length - n);
     if (state.offset > maxOff) state.offset = maxOff;
     if (state.offset < 0) state.offset = 0;
     var end = all.length - state.offset, start = Math.max(0, end - n);
     return { m: m, plotW: plotW, n: n, start: start, end: end, vis: all.slice(start, end), maxOff: maxOff };
+  }
+  function setZoom(nextN, anchorRatio) {
+    if (!state.view || !state.candles.length) return;
+    var W = state.view.W || Math.max(300, Math.floor(el.wrap.clientWidth) || 600);
+    var lim = zoomLimits(W), oldN = state.view.n || state.view.vis.length || 1;
+    nextN = Math.round(Math.max(lim.min, Math.min(lim.max, nextN)));
+    if (nextN === oldN) return;
+    anchorRatio = Math.max(0, Math.min(1, anchorRatio == null ? 0.5 : anchorRatio));
+    var oldStart = state.view.start;
+    var anchorIndex = oldStart + anchorRatio * Math.max(0, oldN - 1);
+    var newStart = Math.round(anchorIndex - anchorRatio * Math.max(0, nextN - 1));
+    newStart = Math.max(0, Math.min(Math.max(0, state.candles.length - nextN), newStart));
+    state.zoom[state.tf] = nextN;
+    state.offset = Math.max(0, state.candles.length - (newStart + nextN));
+    state.hover = -1; el.tip.hidden = true; render();
+  }
+  function panCandles(delta) {
+    if (!state.view || !delta) return;
+    var old = state.offset;
+    state.offset = Math.max(0, Math.min(state.view.maxOff, state.offset + delta));
+    if (state.offset !== old) { state.hover = -1; el.tip.hidden = true; render(); }
   }
 
   /* ===== 그래프 그리기 (SVG 조각 문자열) ===== */
@@ -120,7 +149,7 @@
     });
 
     vis.forEach(function (c, i) {
-      var cx = m.l + slot * (i + 0.5), bw = state.tf === '5' ? Math.max(2, Math.min(18, slot * 0.62)) : Math.max(2, slot - Math.max(1, slot * 0.08));
+      var cx = m.l + slot * (i + 0.5), bw = Math.max(1.5, slot - Math.max(1, slot * 0.08));
       var col = c.c > c.o ? UP_COLOR : c.c < c.o ? DOWN_COLOR : FLAT_COLOR, op = c.gapped ? 0.5 : 1;
       var yo = Y(c.o), yc = Y(c.c);
       s.push('<line x1="' + f1(cx) + '" x2="' + f1(cx) + '" y1="' + f1(Y(c.h)) + '" y2="' + f1(Y(c.l)) + '" stroke="' + col + '" stroke-width="' + (slot < 8 ? 1 : 1.4) + '" opacity="' + op + '"/>');
@@ -304,7 +333,7 @@
       '.cd-legend i{display:inline-block;width:7px;height:7px;border-radius:2px}' +
       '.cd-wrap{position:relative;margin-top:16px}' +
       '.cd-unit{display:block;font-size:10px;color:var(--muted);padding:3px 0 2px;margin-bottom:10px}' +
-      '.cd-wrap svg{display:block;width:100%;height:auto;overflow:visible;touch-action:pan-y;user-select:none;-webkit-user-select:none;cursor:ew-resize}' +
+      '.cd-wrap svg{display:block;width:100%;height:auto;overflow:visible;touch-action:pan-y;user-select:none;-webkit-user-select:none;cursor:grab}' +
       '.cd-nav{display:flex;gap:8px;margin:12px 0 14px}' +
       '.cd-nav button:disabled{opacity:.35;cursor:default}' +
       '.cd-bottom{display:flex;justify-content:space-between;gap:15px;border-top:1px solid var(--line);padding-top:12px;font-size:10px;color:var(--muted);line-height:1.6}' +
@@ -338,7 +367,7 @@
       '<div class="cd-controls"><div class="cd-legend"><span><i style="background:' + UP_COLOR + '"></i>표차 확대</span><span><i style="background:' + DOWN_COLOR + '"></i>표차 축소</span><span><i style="background:' + FLAT_COLOR + ';opacity:.5"></i>관측 공백 뒤</span></div></div>' +
       '<div class="cd-wrap" id="cd-wrap"><span class="cd-unit" id="cd-unit"></span><svg id="cd-svg" role="img" aria-label="1위와 2위 표차의 캔들차트"></svg><div class="cd-tip" id="cd-tip" role="status" hidden></div></div>' +
       '<div class="cd-nav"><button class="quiet-button" id="cd-prev" type="button">◀ 이전</button><button class="quiet-button" id="cd-next" type="button">다음 ▶</button><button class="quiet-button" id="cd-latest" type="button">최신</button></div>' +
-      '<div class="cd-bottom"><p>표차 = 1위 − 2위 득표수. 몸통은 시가(직전 관측 표차)에서 종가(구간 마지막 표차)까지, 위·아래 선은 구간 중 최고·최저예요. 관측이 빠진 구간은 임의로 채우지 않아요. PC에서는 차트 위에서 마우스 휠을 굴려 시간축을 좌우로 이동할 수 있어요.</p><span id="cd-range"></span></div>';
+      '<div class="cd-bottom"><p>표차 = 1위 − 2위 득표수. 몸통은 시가(직전 관측 표차)에서 종가(구간 마지막 표차)까지, 위·아래 선은 구간 중 최고·최저예요. 관측이 빠진 구간은 임의로 채우지 않아요. PC: 휠로 좌우 이동, Ctrl+휠로 확대·축소. 모바일: 한 손가락 좌우 드래그로 이동, 두 손가락 핀치로 확대·축소할 수 있어요.</p><span id="cd-range"></span></div>';
     el.wrap = root.querySelector('#cd-wrap'); el.svg = root.querySelector('#cd-svg'); el.tip = root.querySelector('#cd-tip');
     el.unit = root.querySelector('#cd-unit'); el.range = root.querySelector('#cd-range'); el.tf = root.querySelector('#cd-tf');
     el.prev = root.querySelector('#cd-prev'); el.next = root.querySelector('#cd-next'); el.latest = root.querySelector('#cd-latest');
@@ -356,36 +385,89 @@
     el.next.addEventListener('click', function () { page(-1); });
     el.latest.addEventListener('click', function () { state.offset = 0; render(); });
 
-    // 차트 위에서 마우스 휠/트랙패드 스크롤 → 시간축 좌우 이동.
-    // 아래/오른쪽 = 과거(왼쪽), 위/왼쪽 = 최신(오른쪽).
+    // PC: 휠=시간축 이동, Ctrl+휠=확대/축소.
     var wheelCarry = 0;
     el.svg.addEventListener('wheel', function (e) {
-      if (!state.view || !state.view.vis.length || state.view.maxOff <= 0) return;
-      e.preventDefault();
+      if (!state.view || !state.view.vis.length) return;
+      var rect = el.svg.getBoundingClientRect();
+      var anchor = Math.max(0, Math.min(1, (e.clientX - rect.left) / Math.max(1, rect.width)));
 
+      if (e.ctrlKey) {
+        e.preventDefault();
+        var factor = e.deltaY > 0 ? 1.16 : 0.86;
+        setZoom(state.view.n * factor, anchor);
+        return;
+      }
+      if (state.view.maxOff <= 0) return;
+      e.preventDefault();
       var raw = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
       if (!raw) return;
-
-      // 일반 마우스 휠은 한 번에 약 3봉, 트랙패드는 누적해서 부드럽게 이동.
       var unit = e.deltaMode === 1 ? 16 : (e.deltaMode === 2 ? 120 : 1);
       wheelCarry += raw * unit;
-      var threshold = 36;
-      var steps = Math.trunc(wheelCarry / threshold);
+      var steps = Math.trunc(wheelCarry / 30);
       if (!steps) return;
-      wheelCarry -= steps * threshold;
-
-      var move = Math.max(-8, Math.min(8, steps));
-      var oldOffset = state.offset;
-      state.offset = Math.max(0, Math.min(state.view.maxOff, state.offset + move));
-      if (state.offset !== oldOffset) {
-        state.hover = -1;
-        el.tip.hidden = true;
-        render();
-      }
+      wheelCarry -= steps * 30;
+      panCandles(Math.max(-10, Math.min(10, steps)));
     }, { passive: false });
 
-    el.svg.addEventListener('pointermove', onPointer);
-    el.svg.addEventListener('pointerdown', onPointer);
+    // 모바일: 한 손가락 드래그=좌우 이동, 두 손가락 핀치=확대/축소.
+    var touches = {}, dragX = null, dragCarry = 0, pinchDist = 0, pinchN = 0;
+    function touchList() { return Object.keys(touches).map(function (k) { return touches[k]; }); }
+    function dist(a, b) { var dx = a.x - b.x, dy = a.y - b.y; return Math.sqrt(dx * dx + dy * dy); }
+    el.svg.addEventListener('pointerdown', function (e) {
+      if (e.pointerType !== 'touch') { onPointer(e); return; }
+      state.touch = true;
+      touches[e.pointerId] = { x: e.clientX, y: e.clientY };
+      try { el.svg.setPointerCapture(e.pointerId); } catch (_) {}
+      var ts = touchList();
+      if (ts.length === 1) { dragX = e.clientX; dragCarry = 0; }
+      if (ts.length >= 2) {
+        pinchDist = dist(ts[0], ts[1]);
+        pinchN = state.view ? state.view.n : (state.zoom[state.tf] || FRAMES[state.tf].show);
+        dragX = null; hideTip();
+      }
+    });
+    el.svg.addEventListener('pointermove', function (e) {
+      if (e.pointerType !== 'touch') { onPointer(e); return; }
+      if (!touches[e.pointerId]) return;
+      var prevX = touches[e.pointerId].x;
+      touches[e.pointerId] = { x: e.clientX, y: e.clientY };
+      var ts = touchList();
+
+      if (ts.length >= 2) {
+        e.preventDefault();
+        var d = dist(ts[0], ts[1]);
+        if (pinchDist > 0 && pinchN > 0) {
+          var midX = (ts[0].x + ts[1].x) / 2;
+          var r = el.svg.getBoundingClientRect();
+          var anchor = Math.max(0, Math.min(1, (midX - r.left) / Math.max(1, r.width)));
+          setZoom(pinchN * (pinchDist / Math.max(20, d)), anchor);
+        }
+        return;
+      }
+      if (ts.length === 1 && dragX != null && state.view) {
+        var dx = e.clientX - prevX;
+        dragCarry += dx;
+        var pxPerCandle = Math.max(3, state.view.slot || 6);
+        var move = Math.trunc(dragCarry / pxPerCandle);
+        if (move) {
+          e.preventDefault();
+          dragCarry -= move * pxPerCandle;
+          panCandles(move);
+        }
+        dragX = e.clientX;
+      }
+    }, { passive: false });
+    function endTouch(e) {
+      if (e.pointerType !== 'touch') return;
+      delete touches[e.pointerId];
+      var ts = touchList();
+      if (ts.length < 2) { pinchDist = 0; pinchN = 0; }
+      if (ts.length === 1) { dragX = ts[0].x; dragCarry = 0; }
+      else if (!ts.length) { dragX = null; dragCarry = 0; }
+    }
+    el.svg.addEventListener('pointerup', endTouch);
+    el.svg.addEventListener('pointercancel', endTouch);
     el.svg.addEventListener('pointerleave', function (e) { if (e.pointerType !== 'touch') hideTip(); });
     document.addEventListener('pointerdown', function (e) { if (!el.svg.contains(e.target) && !el.tip.hidden) hideTip(); });
     root.querySelector('#cd-image').addEventListener('click', exportPng);
