@@ -18,7 +18,7 @@
   };
   var FONT = 'DM Sans,Noto Sans KR,Apple SD Gothic Neo,Malgun Gothic,sans-serif';
 
-  var state = { tf: '30', offset: 0, map: {}, points: [], candles: [], base: null, endsAt: null, lastFull: 0, view: null, hover: -1 };
+  var state = { touch: false, tf: '30', offset: 0, map: {}, points: [], candles: [], base: null, endsAt: null, lastFull: 0, view: null, hover: -1 };
   var root, el = {};
 
   /* ===== 작은 도구들 ===== */
@@ -74,10 +74,10 @@
   }
 
   /* ===== 화면에 보일 범위 계산 ===== */
-  function margins(W) { return { l: W < 520 ? 52 : 62, r: 12, t: 14, b: 40 }; }
+  function margins(W) { return { l: W < 520 ? 44 : 62, r: 8, t: 14, b: 40 }; }
   function computeView(W) {
     var m = margins(W), plotW = W - m.l - m.r;
-    var n = Math.min(FRAMES[state.tf].show, Math.max(10, Math.floor(plotW / 7)));
+    var n = Math.min(FRAMES[state.tf].show, Math.max(10, Math.floor(plotW / 4)));
     var all = state.candles, maxOff = Math.max(0, all.length - n);
     if (state.offset > maxOff) state.offset = maxOff;
     if (state.offset < 0) state.offset = 0;
@@ -108,7 +108,7 @@
     var lastDay = -1;
     vis.forEach(function (c, i) {
       var cx = m.l + slot * (i + 0.5);
-      if (i === hover) s.push('<rect x="' + f1(cx - slot / 2) + '" y="' + m.t + '" width="' + f1(slot) + '" height="' + ph + '" fill="#ffffff0f"/>');
+      if (i === hover && !state.touch) s.push('<rect x="' + f1(cx - slot / 2) + '" y="' + m.t + '" width="' + f1(slot) + '" height="' + ph + '" fill="#ffffff0f"/>');
       if (Math.round(c.t / size) % k === 0) {
         var day = kst(c.t).D;
         s.push('<text x="' + f1(cx) + '" y="' + (H - m.b + 16) + '" text-anchor="middle" font-size="10" fill="#979f8e" font-family=\'' + FONT + '\'>' + hm(c.t) + '</text>');
@@ -123,7 +123,7 @@
       var cx = m.l + slot * (i + 0.5), bw = state.tf === '5' ? Math.max(2, Math.min(18, slot * 0.62)) : Math.max(2, slot - Math.max(1, slot * 0.08));
       var col = c.c > c.o ? UP_COLOR : c.c < c.o ? DOWN_COLOR : FLAT_COLOR, op = c.gapped ? 0.5 : 1;
       var yo = Y(c.o), yc = Y(c.c);
-      s.push('<line x1="' + f1(cx) + '" x2="' + f1(cx) + '" y1="' + f1(Y(c.h)) + '" y2="' + f1(Y(c.l)) + '" stroke="' + col + '" stroke-width="1.4" opacity="' + op + '"/>');
+      s.push('<line x1="' + f1(cx) + '" x2="' + f1(cx) + '" y1="' + f1(Y(c.h)) + '" y2="' + f1(Y(c.l)) + '" stroke="' + col + '" stroke-width="' + (slot < 8 ? 1 : 1.4) + '" opacity="' + op + '"/>');
       s.push('<rect x="' + f1(cx - bw / 2) + '" y="' + f1(Math.min(yo, yc)) + '" width="' + f1(bw) + '" height="' + f1(Math.max(1.5, Math.abs(yo - yc))) + '" fill="' + col + '" opacity="' + op + '"/>');
     });
 
@@ -173,7 +173,11 @@
     var title = state.tf === '5' ? md(c.t) + ' ' + hm(c.t) + ' 집계' : md(c.t) + ' ' + hm(c.t) + '–' + hm(c.t + size) + ' · ' + FRAMES[state.tf].label;
     var d = c.c - c.o, col = d > 0 ? UP_COLOR : d < 0 ? DOWN_COLOR : FLAT_COLOR;
     function row(l, val) { return '<p><span>' + l + '</span><b>' + val + '</b></p>'; }
-    var h = '<strong>' + esc(title) + '</strong>' + row('시가', num(c.o)) + row('고가', num(c.h)) + row('저가', num(c.l)) + row('종가', num(c.c)) +
+    function row2(l1, v1, l2, v2) { return '<p><span>' + l1 + ' <b>' + v1 + '</b></span><span>' + l2 + ' <b>' + v2 + '</b></span></p>'; }
+    var narrow = el.wrap.clientWidth < 520;
+    var h = '<strong>' + esc(title) + '</strong>' +
+      (narrow ? row2('시가', num(c.o), '종가', num(c.c)) + row2('고가', num(c.h), '저가', num(c.l))
+              : row('시가', num(c.o)) + row('고가', num(c.h)) + row('저가', num(c.l)) + row('종가', num(c.c))) +
       '<p><span>표차 변화</span><b style="color:' + col + '">' + signed(d) + '</b></p>' +
       '<p><span>' + esc(c.lead) + '</span><b>' + num(c.a) + '</b></p><p><span>' + esc(c.second) + '</span><b>' + num(c.b) + '</b></p>' +
       '<div class="cd-dim">관측 ' + c.n + '회';
@@ -190,6 +194,7 @@
 
   function onPointer(e) {
     var v = state.view;
+    state.touch = e.pointerType === 'touch';
     if (!v || !v.vis.length) return;
     var r = el.svg.getBoundingClientRect(), x = (e.clientX - r.left) * (v.W / r.width);
     var i = Math.floor((x - v.m.l) / v.slot);
@@ -352,7 +357,8 @@
     el.latest.addEventListener('click', function () { state.offset = 0; render(); });
     el.svg.addEventListener('pointermove', onPointer);
     el.svg.addEventListener('pointerdown', onPointer);
-    el.svg.addEventListener('pointerleave', hideTip);
+    el.svg.addEventListener('pointerleave', function (e) { if (e.pointerType !== 'touch') hideTip(); });
+    document.addEventListener('pointerdown', function (e) { if (!el.svg.contains(e.target) && !el.tip.hidden) hideTip(); });
     root.querySelector('#cd-image').addEventListener('click', exportPng);
     var timer;
     window.addEventListener('resize', function () { clearTimeout(timer); timer = setTimeout(render, 120); });
