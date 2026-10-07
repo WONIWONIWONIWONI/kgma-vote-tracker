@@ -13,6 +13,7 @@
   <script src="./axis.js?v=20261007-adaptive-axis" defer></script>
   <script src="./exports.js?v=20261007-combined-image" defer></script>
   <script src="./app.js?v=20261007-combined-image" defer></script>
+  <script src="./candles.js?v=20261007-candles" defer></script>
 </head>
 <body>
   <div class="site-shell">
@@ -34,6 +35,7 @@
         <div class="chart-wrap"><div class="chart-meta"><span class="chart-unit" id="chart-unit">득표수 (표)</span><span class="chart-axis-note" id="chart-axis-note"></span></div><svg id="trend-chart" viewBox="0 0 1100 310" role="img" aria-label="상위 2팀의 득표 추이"></svg><div class="tooltip" id="tooltip" role="status" hidden></div></div>
         <div class="chart-bottom"><p id="chart-note"></p><span id="chart-window"></span></div>
       </section>
+      <section class="panel has-image-button cd-panel" id="candle-panel" aria-labelledby="cd-title"></section>
         <section class="panel activity-panel has-image-button" aria-labelledby="recent-title"><button type="button" class="quiet-button panel-image-button" data-image="pace" aria-label="직전 관측 대비 움직임 PNG 저장" title="직전 관측 대비 움직임 PNG 저장"><span aria-hidden="true">↓</span> 이미지</button><div class="panel-heading compact"><div><div class="section-kicker">THE PACE</div><h2 id="recent-title">직전 관측 대비 움직임</h2></div><span class="panel-tag" id="pace-tag">기록 대기</span></div><div class="table-scroll"><table><thead><tr><th scope="col">아티스트</th><th scope="col">표수 변화</th><th scope="col">점유율 변화</th></tr></thead><tbody id="pace-body"></tbody></table></div><p class="panel-footnote" id="pace-note"></p></section>
       <section class="panel hourly-panel has-image-button" aria-labelledby="hourly-title"><button type="button" class="quiet-button panel-image-button" data-image="hourly" aria-label="선택 날짜의 전체 시간대별 증가량 PNG 저장" title="선택 날짜의 전체 시간대별 증가량 PNG 저장"><span aria-hidden="true">↓</span> 이미지</button>
         <div class="panel-heading compact"><div><div class="section-kicker">BY THE HOUR</div><h2 id="hourly-title">시간대별 득표 증가량</h2><p class="hourly-intro">한 시간 동안 두 팀이 얼마나 더 얻었는지 비교해요.</p></div><label class="hourly-date-label">날짜 선택<select id="hourly-date" aria-label="시간대별 증가량 날짜"></select></label></div>
