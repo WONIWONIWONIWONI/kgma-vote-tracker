@@ -304,7 +304,7 @@
       '.cd-legend i{display:inline-block;width:7px;height:7px;border-radius:2px}' +
       '.cd-wrap{position:relative;margin-top:16px}' +
       '.cd-unit{display:block;font-size:10px;color:var(--muted);padding:3px 0 2px;margin-bottom:10px}' +
-      '.cd-wrap svg{display:block;width:100%;height:auto;overflow:visible;touch-action:pan-y;user-select:none;-webkit-user-select:none}' +
+      '.cd-wrap svg{display:block;width:100%;height:auto;overflow:visible;touch-action:pan-y;user-select:none;-webkit-user-select:none;cursor:ew-resize}' +
       '.cd-nav{display:flex;gap:8px;margin:12px 0 14px}' +
       '.cd-nav button:disabled{opacity:.35;cursor:default}' +
       '.cd-bottom{display:flex;justify-content:space-between;gap:15px;border-top:1px solid var(--line);padding-top:12px;font-size:10px;color:var(--muted);line-height:1.6}' +
@@ -338,7 +338,7 @@
       '<div class="cd-controls"><div class="cd-legend"><span><i style="background:' + UP_COLOR + '"></i>표차 확대</span><span><i style="background:' + DOWN_COLOR + '"></i>표차 축소</span><span><i style="background:' + FLAT_COLOR + ';opacity:.5"></i>관측 공백 뒤</span></div></div>' +
       '<div class="cd-wrap" id="cd-wrap"><span class="cd-unit" id="cd-unit"></span><svg id="cd-svg" role="img" aria-label="1위와 2위 표차의 캔들차트"></svg><div class="cd-tip" id="cd-tip" role="status" hidden></div></div>' +
       '<div class="cd-nav"><button class="quiet-button" id="cd-prev" type="button">◀ 이전</button><button class="quiet-button" id="cd-next" type="button">다음 ▶</button><button class="quiet-button" id="cd-latest" type="button">최신</button></div>' +
-      '<div class="cd-bottom"><p>표차 = 1위 − 2위 득표수. 몸통은 시가(직전 관측 표차)에서 종가(구간 마지막 표차)까지, 위·아래 선은 구간 중 최고·최저예요. 관측이 빠진 구간은 임의로 채우지 않아요.</p><span id="cd-range"></span></div>';
+      '<div class="cd-bottom"><p>표차 = 1위 − 2위 득표수. 몸통은 시가(직전 관측 표차)에서 종가(구간 마지막 표차)까지, 위·아래 선은 구간 중 최고·최저예요. 관측이 빠진 구간은 임의로 채우지 않아요. PC에서는 차트 위에서 마우스 휠을 굴려 시간축을 좌우로 이동할 수 있어요.</p><span id="cd-range"></span></div>';
     el.wrap = root.querySelector('#cd-wrap'); el.svg = root.querySelector('#cd-svg'); el.tip = root.querySelector('#cd-tip');
     el.unit = root.querySelector('#cd-unit'); el.range = root.querySelector('#cd-range'); el.tf = root.querySelector('#cd-tf');
     el.prev = root.querySelector('#cd-prev'); el.next = root.querySelector('#cd-next'); el.latest = root.querySelector('#cd-latest');
@@ -355,6 +355,35 @@
     el.prev.addEventListener('click', function () { page(1); });
     el.next.addEventListener('click', function () { page(-1); });
     el.latest.addEventListener('click', function () { state.offset = 0; render(); });
+
+    // 차트 위에서 마우스 휠/트랙패드 스크롤 → 시간축 좌우 이동.
+    // 아래/오른쪽 = 과거(왼쪽), 위/왼쪽 = 최신(오른쪽).
+    var wheelCarry = 0;
+    el.svg.addEventListener('wheel', function (e) {
+      if (!state.view || !state.view.vis.length || state.view.maxOff <= 0) return;
+      e.preventDefault();
+
+      var raw = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (!raw) return;
+
+      // 일반 마우스 휠은 한 번에 약 3봉, 트랙패드는 누적해서 부드럽게 이동.
+      var unit = e.deltaMode === 1 ? 16 : (e.deltaMode === 2 ? 120 : 1);
+      wheelCarry += raw * unit;
+      var threshold = 36;
+      var steps = Math.trunc(wheelCarry / threshold);
+      if (!steps) return;
+      wheelCarry -= steps * threshold;
+
+      var move = Math.max(-8, Math.min(8, steps));
+      var oldOffset = state.offset;
+      state.offset = Math.max(0, Math.min(state.view.maxOff, state.offset + move));
+      if (state.offset !== oldOffset) {
+        state.hover = -1;
+        el.tip.hidden = true;
+        render();
+      }
+    }, { passive: false });
+
     el.svg.addEventListener('pointermove', onPointer);
     el.svg.addEventListener('pointerdown', onPointer);
     el.svg.addEventListener('pointerleave', function (e) { if (e.pointerType !== 'touch') hideTip(); });
