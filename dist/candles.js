@@ -117,7 +117,7 @@
   /* ===== 그래프 그리기 (SVG 조각 문자열) ===== */
   function chartInner(W, H, v, hover) {
     var m = v.m, ph = H - m.t - m.b, vis = v.vis, s = [];
-    var slot = v.plotW / Math.max(vis.length, 30);
+    var slot = v.plotW / Math.max(vis.length, 1);
     var lo = Infinity, hi = -Infinity;
     vis.forEach(function (c) { if (c.l < lo) lo = c.l; if (c.h > hi) hi = c.h; });
     if (!vis.length) { lo = 0; hi = 10; }
@@ -367,7 +367,7 @@
       '<div class="cd-controls"><div class="cd-legend"><span><i style="background:' + UP_COLOR + '"></i>표차 확대</span><span><i style="background:' + DOWN_COLOR + '"></i>표차 축소</span><span><i style="background:' + FLAT_COLOR + ';opacity:.5"></i>관측 공백 뒤</span></div></div>' +
       '<div class="cd-wrap" id="cd-wrap"><span class="cd-unit" id="cd-unit"></span><svg id="cd-svg" role="img" aria-label="1위와 2위 표차의 캔들차트"></svg><div class="cd-tip" id="cd-tip" role="status" hidden></div></div>' +
       '<div class="cd-nav"><button class="quiet-button" id="cd-prev" type="button">◀ 이전</button><button class="quiet-button" id="cd-next" type="button">다음 ▶</button><button class="quiet-button" id="cd-latest" type="button">최신</button></div>' +
-      '<div class="cd-bottom"><p>표차 = 1위 − 2위 득표수. 몸통은 시가(직전 관측 표차)에서 종가(구간 마지막 표차)까지, 위·아래 선은 구간 중 최고·최저예요. 관측이 빠진 구간은 임의로 채우지 않아요. PC: 휠로 좌우 이동, Ctrl+휠로 확대·축소. 모바일: 한 손가락 좌우 드래그로 이동, 두 손가락 핀치로 확대·축소할 수 있어요.</p><span id="cd-range"></span></div>';
+      '<div class="cd-bottom"><p>표차 = 1위 − 2위 득표수. 몸통은 시가(직전 관측 표차)에서 종가(구간 마지막 표차)까지, 위·아래 선은 구간 중 최고·최저예요. 관측이 빠진 구간은 임의로 채우지 않아요. PC: 휠로 좌우 이동, Ctrl+휠로 시간축을 압축·확장. 모바일: 한 손가락 좌우 드래그로 이동, 두 손가락 핀치로 시간축을 압축·확장할 수 있어요.</p><span id="cd-range"></span></div>';
     el.wrap = root.querySelector('#cd-wrap'); el.svg = root.querySelector('#cd-svg'); el.tip = root.querySelector('#cd-tip');
     el.unit = root.querySelector('#cd-unit'); el.range = root.querySelector('#cd-range'); el.tf = root.querySelector('#cd-tf');
     el.prev = root.querySelector('#cd-prev'); el.next = root.querySelector('#cd-next'); el.latest = root.querySelector('#cd-latest');
@@ -385,7 +385,7 @@
     el.next.addEventListener('click', function () { page(-1); });
     el.latest.addEventListener('click', function () { state.offset = 0; render(); });
 
-    // PC: 휠=시간축 이동, Ctrl+휠=확대/축소.
+    // PC: 휠=시간축 이동, Ctrl+휠=X축 시간 밀도 압축/확장.
     var wheelCarry = 0;
     el.svg.addEventListener('wheel', function (e) {
       if (!state.view || !state.view.vis.length) return;
@@ -410,7 +410,7 @@
       panCandles(Math.max(-10, Math.min(10, steps)));
     }, { passive: false });
 
-    // 모바일: 한 손가락 드래그=좌우 이동, 두 손가락 핀치=확대/축소.
+    // 모바일: 한 손가락 드래그=좌우 이동, 두 손가락 핀치=X축 시간 밀도 압축/확장.
     var touches = {}, dragX = null, dragCarry = 0, pinchDist = 0, pinchN = 0;
     function touchList() { return Object.keys(touches).map(function (k) { return touches[k]; }); }
     function dist(a, b) { var dx = a.x - b.x, dy = a.y - b.y; return Math.sqrt(dx * dx + dy * dy); }
