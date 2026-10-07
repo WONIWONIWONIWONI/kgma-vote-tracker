@@ -331,7 +331,7 @@
       '.cd-legend{display:flex;gap:16px;flex-wrap:wrap}' +
       '.cd-legend span{display:flex;align-items:center;gap:6px;color:#c0c8b5;font-size:10px}' +
       '.cd-legend i{display:inline-block;width:7px;height:7px;border-radius:2px}' +
-      '.cd-wrap{position:relative;margin-top:16px}' +
+      '.cd-wrap{position:relative;margin-top:16px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}' +
       '.cd-unit{display:block;font-size:10px;color:var(--muted);padding:3px 0 2px;margin-bottom:10px}' +
       '.cd-wrap svg{display:block;width:100%;height:auto;overflow:visible;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;cursor:grab}' +
       '.cd-nav{display:flex;gap:8px;margin:12px 0 14px}' +
@@ -410,92 +410,86 @@
       panCandles(Math.max(-10, Math.min(10, steps)));
     }, { passive: false });
 
-    // iOS Safari는 Pointer Events의 preventDefault만으로 페이지 핀치 줌을 막지 못할 수 있어
-    // 차트 영역의 두 손가락 native touch 제스처를 별도로 차단합니다.
-    el.svg.addEventListener('touchstart', function (e) {
-      if (e.touches && e.touches.length >= 2) e.preventDefault();
-    }, { passive: false });
-    el.svg.addEventListener('touchmove', function (e) {
-      if (e.touches && e.touches.length >= 2) e.preventDefault();
-    }, { passive: false });
-    el.svg.addEventListener('gesturestart', function (e) { e.preventDefault(); }, { passive: false });
-    el.svg.addEventListener('gesturechange', function (e) { e.preventDefault(); }, { passive: false });
-    el.svg.addEventListener('gestureend', function (e) { e.preventDefault(); }, { passive: false });
-    el.svg.addEventListener('selectstart', function (e) { e.preventDefault(); });
-    el.svg.addEventListener('contextmenu', function (e) { if (state.touch) e.preventDefault(); });
-
-    // 모바일: 한 손가락은 방향을 판별해 가로=차트 이동, 세로=페이지 스크롤.
-    // 두 손가락 핀치는 X축 시간 밀도만 압축/확장.
-    var touches = {}, gesture = null, dragCarry = 0, pinchDist = 0, pinchN = 0, pinchAnchor = 0.5;
-    function touchList() { return Object.keys(touches).map(function (k) { return touches[k]; }); }
-    function dist(a, b) { var dx = a.x - b.x, dy = a.y - b.y; return Math.sqrt(dx * dx + dy * dy); }
-    el.svg.addEventListener('pointerdown', function (e) {
-      if (e.pointerType !== 'touch') { onPointer(e); return; }
+    // 모바일은 native Touch Events 하나로만 처리합니다.
+    // iOS Safari에서 페이지 핀치가 시작되기 전에 cd-wrap 단계에서 preventDefault합니다.
+    var tMode = null, tStartX = 0, tStartY = 0, tLastX = 0, tLastY = 0, tCarry = 0;
+    var tPinchDist = 0, tPinchN = 0, tPinchAnchor = 0.5;
+    function tDist(a, b) {
+      var dx = a.clientX - b.clientX, dy = a.clientY - b.clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+    el.wrap.addEventListener('touchstart', function (e) {
       state.touch = true;
-      touches[e.pointerId] = { x: e.clientX, y: e.clientY, px: e.clientX, py: e.clientY };
-      try { el.svg.setPointerCapture(e.pointerId); } catch (_) {}
-      var ts = touchList();
-      if (ts.length === 1) { gesture = null; dragCarry = 0; }
-      if (ts.length >= 2) {
-        gesture = 'pinch';
-        pinchDist = dist(ts[0], ts[1]);
-        pinchN = state.view ? state.view.n : (state.zoom[state.tf] || FRAMES[state.tf].show);
-        var r0 = el.svg.getBoundingClientRect(), mid0 = (ts[0].x + ts[1].x) / 2;
-        pinchAnchor = Math.max(0, Math.min(1, (mid0 - r0.left) / Math.max(1, r0.width)));
-        hideTip();
-      }
-    });
-    el.svg.addEventListener('pointermove', function (e) {
-      if (e.pointerType !== 'touch') { onPointer(e); return; }
-      var p = touches[e.pointerId];
-      if (!p) return;
-      var oldX = p.x, oldY = p.y;
-      p.px = oldX; p.py = oldY; p.x = e.clientX; p.y = e.clientY;
-      var ts = touchList();
-
-      if (ts.length >= 2) {
+      if (e.touches.length >= 2) {
         e.preventDefault();
-        gesture = 'pinch';
-        var d = dist(ts[0], ts[1]);
-        if (pinchDist > 0 && pinchN > 0) {
-          setZoom(pinchN * (pinchDist / Math.max(16, d)), pinchAnchor);
-        }
+        tMode = 'pinch';
+        tPinchDist = tDist(e.touches[0], e.touches[1]);
+        tPinchN = state.view ? state.view.n : (state.zoom[state.tf] || FRAMES[state.tf].show);
+        var rr = el.svg.getBoundingClientRect();
+        var mid = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        tPinchAnchor = Math.max(0, Math.min(1, (mid - rr.left) / Math.max(1, rr.width)));
+        hideTip();
         return;
       }
+      if (e.touches.length === 1) {
+        var t = e.touches[0];
+        tMode = null; tStartX = tLastX = t.clientX; tStartY = tLastY = t.clientY; tCarry = 0;
+      }
+    }, { passive: false, capture: true });
 
-      if (ts.length === 1 && state.view) {
-        var dx = p.x - oldX, dy = p.y - oldY;
-        if (!gesture && (Math.abs(p.x - p.px) + Math.abs(p.y - p.py) > 0)) {
-          var totalDx = p.x - (p.startX == null ? (p.startX = oldX) : p.startX);
-          var totalDy = p.y - (p.startY == null ? (p.startY = oldY) : p.startY);
-          if (Math.abs(totalDx) > 6 || Math.abs(totalDy) > 6) gesture = Math.abs(totalDx) >= Math.abs(totalDy) ? 'pan' : 'scroll';
+    el.wrap.addEventListener('touchmove', function (e) {
+      if (e.touches.length >= 2) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (tMode !== 'pinch') {
+          tMode = 'pinch';
+          tPinchDist = tDist(e.touches[0], e.touches[1]);
+          tPinchN = state.view ? state.view.n : (state.zoom[state.tf] || FRAMES[state.tf].show);
         }
-        if (gesture === 'pan') {
-          e.preventDefault();
-          dragCarry += dx;
-          var pxPerCandle = Math.max(1.2, state.view.slot || 4);
-          var move = Math.trunc(dragCarry / pxPerCandle);
-          if (move) { dragCarry -= move * pxPerCandle; panCandles(move); }
-        } else if (gesture === 'scroll') {
-          e.preventDefault();
-          window.scrollBy(0, -dy);
-        }
+        var d = tDist(e.touches[0], e.touches[1]);
+        if (tPinchDist > 0 && tPinchN > 0) setZoom(tPinchN * (tPinchDist / Math.max(16, d)), tPinchAnchor);
+        return;
       }
-    }, { passive: false });
-    function endTouch(e) {
-      if (e.pointerType !== 'touch') return;
-      delete touches[e.pointerId];
-      var ts = touchList();
-      if (ts.length < 2) { pinchDist = 0; pinchN = 0; }
-      if (ts.length === 1) {
-        ts[0].startX = ts[0].x; ts[0].startY = ts[0].y;
-        gesture = null; dragCarry = 0;
-      } else if (!ts.length) {
-        gesture = null; dragCarry = 0;
+      if (e.touches.length !== 1 || !state.view) return;
+      var t = e.touches[0], totalX = t.clientX - tStartX, totalY = t.clientY - tStartY;
+      var dx = t.clientX - tLastX, dy = t.clientY - tLastY;
+      if (!tMode && (Math.abs(totalX) > 7 || Math.abs(totalY) > 7)) {
+        tMode = Math.abs(totalX) > Math.abs(totalY) * 1.15 ? 'pan' : 'scroll';
       }
-    }
-    el.svg.addEventListener('pointerup', endTouch);
-    el.svg.addEventListener('pointercancel', endTouch);
+      if (tMode === 'pan') {
+        e.preventDefault();
+        e.stopPropagation();
+        tCarry += dx;
+        var px = Math.max(1.2, state.view.slot || 4);
+        var move = Math.trunc(tCarry / px);
+        if (move) { tCarry -= move * px; panCandles(move); }
+      }
+      // scroll 모드는 preventDefault하지 않아 브라우저의 자연스러운 세로 스크롤을 그대로 둡니다.
+      tLastX = t.clientX; tLastY = t.clientY;
+    }, { passive: false, capture: true });
+
+    el.wrap.addEventListener('touchend', function (e) {
+      if (e.touches.length < 2) { tPinchDist = 0; tPinchN = 0; }
+      if (!e.touches.length) { tMode = null; tCarry = 0; }
+      else if (e.touches.length === 1) {
+        var t = e.touches[0];
+        tMode = null; tStartX = tLastX = t.clientX; tStartY = tLastY = t.clientY; tCarry = 0;
+      }
+    }, { passive: false, capture: true });
+    el.wrap.addEventListener('touchcancel', function () {
+      tMode = null; tCarry = 0; tPinchDist = 0; tPinchN = 0;
+    }, { passive: false, capture: true });
+
+    // Safari 전용 gesture 이벤트도 wrapper에서 차단합니다.
+    ['gesturestart','gesturechange','gestureend'].forEach(function (name) {
+      el.wrap.addEventListener(name, function (e) { e.preventDefault(); e.stopPropagation(); }, { passive: false, capture: true });
+    });
+    el.wrap.addEventListener('selectstart', function (e) { e.preventDefault(); });
+    el.wrap.addEventListener('contextmenu', function (e) { if (state.touch) e.preventDefault(); });
+
+    // 마우스 hover/tooltip은 기존 Pointer Events 유지.
+    el.svg.addEventListener('pointermove', function (e) { if (e.pointerType !== 'touch') onPointer(e); });
+    el.svg.addEventListener('pointerdown', function (e) { if (e.pointerType !== 'touch') onPointer(e); });
     el.svg.addEventListener('pointerleave', function (e) { if (e.pointerType !== 'touch') hideTip(); });
     document.addEventListener('pointerdown', function (e) { if (!el.svg.contains(e.target) && !el.tip.hidden) hideTip(); });
     root.querySelector('#cd-image').addEventListener('click', exportPng);
