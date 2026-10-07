@@ -1,4 +1,4 @@
-name: Publish KGMA dashboard
+name: Publish KGMA dashboard # RESCENE gap deployment
 
 on:
   workflow_dispatch:

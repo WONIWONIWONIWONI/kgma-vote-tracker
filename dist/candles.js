@@ -10,7 +10,7 @@
   var FLAT_COLOR = '#8f968a';  // 변화 없음
   var RAW = 'https://raw.githubusercontent.com/WONIWONIWONIWONI/kgma-vote-tracker/main/';
   var HISTORY_URLS = [RAW + 'dist/data/history.json', './data/history.json', RAW + 'data/history.json'];
-  var POLL_MS = 45000;
+  var POLL_MS = 45000; // RESCENE-relative gap chart
   var FRAMES = {
     '5': { min: 5, label: '5분봉', show: 72 },
     '30': { min: 30, label: '30분봉', show: 48 },

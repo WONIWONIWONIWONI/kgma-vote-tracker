@@ -6,7 +6,7 @@
   const palette = ['#c2ee64', '#b3a2ff', '#76cef0', '#f1b87a', '#ed9cca', '#8cd5b1'];
   const colors = {rescene:palette[0],riize:palette[1]};
   const gapDefs = [{id:'resceneGap',name:'리센느 − 경쟁팀',color:palette[0]}];
-  const isRescene = team => /rescene|리센느/i.test(String(team?.id||team?.name||''));
+  const isRescene = team => /rescene|리센느/i.test(String(team?.id||team?.name||'')); // gap anchor: RESCENE
   function resceneGap(s){const rescene=s.top2.find(isRescene),rival=s.top2.find(t=>!isRescene(t));return rescene&&rival?rescene.votes-rival.votes:null;}
   const state = {data:window.KGMA_SEED,metric:'votes',range:'all',historyLimit:12,hourlyDate:null,hourlyLimit:6,fetching:false,loadFailed:false,historyLoaded:false,lastCheckedAt:0};
   const escapeHTML = value => String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
