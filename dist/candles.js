@@ -333,7 +333,7 @@
       '.cd-legend i{display:inline-block;width:7px;height:7px;border-radius:2px}' +
       '.cd-wrap{position:relative;margin-top:16px}' +
       '.cd-unit{display:block;font-size:10px;color:var(--muted);padding:3px 0 2px;margin-bottom:10px}' +
-      '.cd-wrap svg{display:block;width:100%;height:auto;overflow:visible;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}' +
+      '.cd-wrap svg{display:block;width:100%;height:auto;overflow:visible;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;cursor:grab}' +
       '.cd-nav{display:flex;gap:8px;margin:12px 0 14px}' +
       '.cd-nav button:disabled{opacity:.35;cursor:default}' +
       '.cd-bottom{display:flex;justify-content:space-between;gap:15px;border-top:1px solid var(--line);padding-top:12px;font-size:10px;color:var(--muted);line-height:1.6}' +
@@ -409,6 +409,20 @@
       wheelCarry -= steps * 30;
       panCandles(Math.max(-10, Math.min(10, steps)));
     }, { passive: false });
+
+    // iOS Safari는 Pointer Events의 preventDefault만으로 페이지 핀치 줌을 막지 못할 수 있어
+    // 차트 영역의 두 손가락 native touch 제스처를 별도로 차단합니다.
+    el.svg.addEventListener('touchstart', function (e) {
+      if (e.touches && e.touches.length >= 2) e.preventDefault();
+    }, { passive: false });
+    el.svg.addEventListener('touchmove', function (e) {
+      if (e.touches && e.touches.length >= 2) e.preventDefault();
+    }, { passive: false });
+    el.svg.addEventListener('gesturestart', function (e) { e.preventDefault(); }, { passive: false });
+    el.svg.addEventListener('gesturechange', function (e) { e.preventDefault(); }, { passive: false });
+    el.svg.addEventListener('gestureend', function (e) { e.preventDefault(); }, { passive: false });
+    el.svg.addEventListener('selectstart', function (e) { e.preventDefault(); });
+    el.svg.addEventListener('contextmenu', function (e) { if (state.touch) e.preventDefault(); });
 
     // 모바일: 한 손가락은 방향을 판별해 가로=차트 이동, 세로=페이지 스크롤.
     // 두 손가락 핀치는 X축 시간 밀도만 압축/확장.
