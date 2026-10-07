@@ -151,7 +151,7 @@
     vis.forEach(function (c, i) {
       var cx = m.l + slot * (i + 0.5);
       var fullBw = Math.max(0.7, slot - Math.max(0.7, slot * 0.10));
-      var bw = state.tf === '5' ? Math.max(0.45, fullBw * 0.50) : fullBw;
+      var bw = Math.max(0.45, fullBw * 0.50);
       var col = c.c > c.o ? UP_COLOR : c.c < c.o ? DOWN_COLOR : FLAT_COLOR, op = c.gapped ? 0.5 : 1;
       var yo = Y(c.o), yc = Y(c.c);
       s.push('<line x1="' + f1(cx) + '" x2="' + f1(cx) + '" y1="' + f1(Y(c.h)) + '" y2="' + f1(Y(c.l)) + '" stroke="' + col + '" stroke-width="' + (slot < 8 ? 1 : 1.4) + '" opacity="' + op + '"/>');
