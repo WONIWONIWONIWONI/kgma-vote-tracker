@@ -76,7 +76,7 @@
   /* ===== 화면에 보일 범위 계산 ===== */
   function margins(W) { return { l: W < 520 ? 44 : 62, r: 8, t: 14, b: 40 }; }
   function zoomLimits(W) {
-    var max = Math.max(20, Math.min(180, state.candles.length || 180));
+    var max = Math.max(20, state.candles.length || 500);
     var min = W < 520 ? 12 : 16;
     return { min: min, max: max };
   }
@@ -149,7 +149,7 @@
     });
 
     vis.forEach(function (c, i) {
-      var cx = m.l + slot * (i + 0.5), bw = Math.max(1.5, slot - Math.max(1, slot * 0.08));
+      var cx = m.l + slot * (i + 0.5), bw = Math.max(0.7, slot - Math.max(0.7, slot * 0.10));
       var col = c.c > c.o ? UP_COLOR : c.c < c.o ? DOWN_COLOR : FLAT_COLOR, op = c.gapped ? 0.5 : 1;
       var yo = Y(c.o), yc = Y(c.c);
       s.push('<line x1="' + f1(cx) + '" x2="' + f1(cx) + '" y1="' + f1(Y(c.h)) + '" y2="' + f1(Y(c.l)) + '" stroke="' + col + '" stroke-width="' + (slot < 8 ? 1 : 1.4) + '" opacity="' + op + '"/>');
@@ -333,7 +333,7 @@
       '.cd-legend i{display:inline-block;width:7px;height:7px;border-radius:2px}' +
       '.cd-wrap{position:relative;margin-top:16px}' +
       '.cd-unit{display:block;font-size:10px;color:var(--muted);padding:3px 0 2px;margin-bottom:10px}' +
-      '.cd-wrap svg{display:block;width:100%;height:auto;overflow:visible;touch-action:pan-y;user-select:none;-webkit-user-select:none;cursor:grab}' +
+      '.cd-wrap svg{display:block;width:100%;height:auto;overflow:visible;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}' +
       '.cd-nav{display:flex;gap:8px;margin:12px 0 14px}' +
       '.cd-nav button:disabled{opacity:.35;cursor:default}' +
       '.cd-bottom{display:flex;justify-content:space-between;gap:15px;border-top:1px solid var(--line);padding-top:12px;font-size:10px;color:var(--muted);line-height:1.6}' +
@@ -394,7 +394,7 @@
 
       if (e.ctrlKey) {
         e.preventDefault();
-        var factor = e.deltaY > 0 ? 1.16 : 0.86;
+        var factor = e.deltaY > 0 ? 1.32 : 0.76;
         setZoom(state.view.n * factor, anchor);
         return;
       }
@@ -410,52 +410,62 @@
       panCandles(Math.max(-10, Math.min(10, steps)));
     }, { passive: false });
 
-    // 모바일: 한 손가락 드래그=좌우 이동, 두 손가락 핀치=X축 시간 밀도 압축/확장.
-    var touches = {}, dragX = null, dragCarry = 0, pinchDist = 0, pinchN = 0;
+    // 모바일: 한 손가락은 방향을 판별해 가로=차트 이동, 세로=페이지 스크롤.
+    // 두 손가락 핀치는 X축 시간 밀도만 압축/확장.
+    var touches = {}, gesture = null, dragCarry = 0, pinchDist = 0, pinchN = 0, pinchAnchor = 0.5;
     function touchList() { return Object.keys(touches).map(function (k) { return touches[k]; }); }
     function dist(a, b) { var dx = a.x - b.x, dy = a.y - b.y; return Math.sqrt(dx * dx + dy * dy); }
     el.svg.addEventListener('pointerdown', function (e) {
       if (e.pointerType !== 'touch') { onPointer(e); return; }
       state.touch = true;
-      touches[e.pointerId] = { x: e.clientX, y: e.clientY };
+      touches[e.pointerId] = { x: e.clientX, y: e.clientY, px: e.clientX, py: e.clientY };
       try { el.svg.setPointerCapture(e.pointerId); } catch (_) {}
       var ts = touchList();
-      if (ts.length === 1) { dragX = e.clientX; dragCarry = 0; }
+      if (ts.length === 1) { gesture = null; dragCarry = 0; }
       if (ts.length >= 2) {
+        gesture = 'pinch';
         pinchDist = dist(ts[0], ts[1]);
         pinchN = state.view ? state.view.n : (state.zoom[state.tf] || FRAMES[state.tf].show);
-        dragX = null; hideTip();
+        var r0 = el.svg.getBoundingClientRect(), mid0 = (ts[0].x + ts[1].x) / 2;
+        pinchAnchor = Math.max(0, Math.min(1, (mid0 - r0.left) / Math.max(1, r0.width)));
+        hideTip();
       }
     });
     el.svg.addEventListener('pointermove', function (e) {
       if (e.pointerType !== 'touch') { onPointer(e); return; }
-      if (!touches[e.pointerId]) return;
-      var prevX = touches[e.pointerId].x;
-      touches[e.pointerId] = { x: e.clientX, y: e.clientY };
+      var p = touches[e.pointerId];
+      if (!p) return;
+      var oldX = p.x, oldY = p.y;
+      p.px = oldX; p.py = oldY; p.x = e.clientX; p.y = e.clientY;
       var ts = touchList();
 
       if (ts.length >= 2) {
         e.preventDefault();
+        gesture = 'pinch';
         var d = dist(ts[0], ts[1]);
         if (pinchDist > 0 && pinchN > 0) {
-          var midX = (ts[0].x + ts[1].x) / 2;
-          var r = el.svg.getBoundingClientRect();
-          var anchor = Math.max(0, Math.min(1, (midX - r.left) / Math.max(1, r.width)));
-          setZoom(pinchN * (pinchDist / Math.max(20, d)), anchor);
+          setZoom(pinchN * (pinchDist / Math.max(16, d)), pinchAnchor);
         }
         return;
       }
-      if (ts.length === 1 && dragX != null && state.view) {
-        var dx = e.clientX - prevX;
-        dragCarry += dx;
-        var pxPerCandle = Math.max(3, state.view.slot || 6);
-        var move = Math.trunc(dragCarry / pxPerCandle);
-        if (move) {
-          e.preventDefault();
-          dragCarry -= move * pxPerCandle;
-          panCandles(move);
+
+      if (ts.length === 1 && state.view) {
+        var dx = p.x - oldX, dy = p.y - oldY;
+        if (!gesture && (Math.abs(p.x - p.px) + Math.abs(p.y - p.py) > 0)) {
+          var totalDx = p.x - (p.startX == null ? (p.startX = oldX) : p.startX);
+          var totalDy = p.y - (p.startY == null ? (p.startY = oldY) : p.startY);
+          if (Math.abs(totalDx) > 6 || Math.abs(totalDy) > 6) gesture = Math.abs(totalDx) >= Math.abs(totalDy) ? 'pan' : 'scroll';
         }
-        dragX = e.clientX;
+        if (gesture === 'pan') {
+          e.preventDefault();
+          dragCarry += dx;
+          var pxPerCandle = Math.max(1.2, state.view.slot || 4);
+          var move = Math.trunc(dragCarry / pxPerCandle);
+          if (move) { dragCarry -= move * pxPerCandle; panCandles(move); }
+        } else if (gesture === 'scroll') {
+          e.preventDefault();
+          window.scrollBy(0, -dy);
+        }
       }
     }, { passive: false });
     function endTouch(e) {
@@ -463,8 +473,12 @@
       delete touches[e.pointerId];
       var ts = touchList();
       if (ts.length < 2) { pinchDist = 0; pinchN = 0; }
-      if (ts.length === 1) { dragX = ts[0].x; dragCarry = 0; }
-      else if (!ts.length) { dragX = null; dragCarry = 0; }
+      if (ts.length === 1) {
+        ts[0].startX = ts[0].x; ts[0].startY = ts[0].y;
+        gesture = null; dragCarry = 0;
+      } else if (!ts.length) {
+        gesture = null; dragCarry = 0;
+      }
     }
     el.svg.addEventListener('pointerup', endTouch);
     el.svg.addEventListener('pointercancel', endTouch);
