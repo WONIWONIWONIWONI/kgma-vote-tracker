@@ -1,5 +1,5 @@
 /* 표차 캔들차트 — dist/candles.js
- * 1위−2위 표차를 주식 캔들(5분봉·30분봉·1시간봉)로 보여줍니다.
+ * 리센느−경쟁팀 표차를 주식 캔들(5분봉·30분봉·1시간봉)로 보여줍니다.
  * 기존 app.js 는 건드리지 않고, 이 파일이 스스로 기록(history.json)을 읽어 그립니다. */
 (function () {
   'use strict';
@@ -31,15 +31,22 @@
   function f1(n) { return Math.round(n * 10) / 10; }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
-  /* ===== 기록 → 한 점(1·2위 표차) ===== */
+  /* ===== 기록 → 한 점(리센느 − 리센느를 제외한 최고 득표 팀) ===== */
   function toPoint(s) {
     if (!s || !s.top2 || s.top2.length < 2) return null;
     var t = Date.parse(s.sourceAt);
     if (!isFinite(t)) return null;
     var tp = s.top2.slice().sort(function (x, y) { return x.rank - y.rank; });
-    var a = Number(tp[0].votes), b = Number(tp[1].votes);
+    var rescene = null, rival = null;
+    for (var i = 0; i < tp.length; i++) {
+      var name = String(tp[i].name || '');
+      if (/RESCENE|리센느/i.test(name)) rescene = tp[i];
+      else if (!rival) rival = tp[i];
+    }
+    if (!rescene || !rival) return null;
+    var a = Number(rescene.votes), b = Number(rival.votes);
     if (!isFinite(a) || !isFinite(b)) return null;
-    return { t: t, a: a, b: b, an: tp[0].name || '', bn: tp[1].name || '' };
+    return { t: t, a: a, b: b, an: rescene.name || 'RESCENE', bn: rival.name || '' };
   }
 
   /* ===== 점들 → 캔들 (시가=직전 관측 표차, 종가=구간 마지막, 고가·저가=구간 최대·최소) ===== */
@@ -251,7 +258,7 @@
       btns[i].className = on ? 'selected' : '';
       btns[i].setAttribute('aria-pressed', on ? 'true' : 'false');
     }
-    el.unit.textContent = '1·2위 표차 (표) · ' + FRAMES[state.tf].label;
+    el.unit.textContent = '리센느 − 경쟁팀 표차 (표) · ' + FRAMES[state.tf].label;
     renderPace();
   }
 
@@ -326,13 +333,13 @@
     }
     var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + totalH + '" viewBox="0 0 ' + W + ' ' + totalH + '">' +
       '<rect width="100%" height="100%" fill="#10120f"/>' +
-      '<text x="28" y="32" font-size="19" font-weight="700" fill="#f2f4ee"' + font + '>KGMA TOP 2 · 표차 흐름 분석</text>' +
+      '<text x="28" y="32" font-size="19" font-weight="700" fill="#f2f4ee"' + font + '>KGMA · 리센느 표차 흐름 분석</text>' +
       '<text x="28" y="55" font-size="11" fill="#9aa093"' + font + '>현재 득표 페이스 · ' + paceLabel + ' 기준  |  캔들 ' + FRAMES[state.tf].label + '</text>' +
       '<text x="28" y="75" font-size="10" fill="#7d8478"' + font + '>최신 표차 ' + num(lc.c) + '표 · ' + esc(last.an) + ' ' + num(last.a) + ' vs ' + esc(last.bn) + ' ' + num(last.b) + '</text>' +
       cards +
       '<text x="28" y="207" font-size="10" fill="#9aa093"' + font + '>표차 캔들 · ' + md(a.t) + ' ' + hm(a.t) + ' ~ ' + md(b.t) + ' ' + hm(b.t) + '</text>' +
       '<g transform="translate(0,' + HDR + ')">' + chartInner(W, H, v, -1) + '</g>' +
-      '<text x="28" y="' + (H + HDR + 21) + '" font-size="9" fill="#7d8478"' + font + '><tspan fill="' + UP_COLOR + '">■</tspan> 표차 확대  <tspan fill="' + DOWN_COLOR + '">■</tspan> 표차 축소  · 현재 추세는 선택 구간의 선형회귀를 단순 연장한 참고치 · 데이터 출처 Berriz</text>' +
+      '<text x="28" y="' + (H + HDR + 21) + '" font-size="9" fill="#7d8478"' + font + '><tspan fill="' + UP_COLOR + '">■</tspan> 표차 확대  <tspan fill="' + DOWN_COLOR + '">■</tspan> 표차 축소  · 표차 = 리센느 − 리센느 제외 최고 득표 팀 (리센느가 뒤지면 음수) · 데이터 출처 Berriz</text>' +
       '</svg>';
     var img = new Image();
     img.onload = function () {
@@ -451,9 +458,9 @@
       '<div class="panel-heading"><div><div class="section-kicker">GAP ANALYSIS</div><h2 id="cd-title">표차 흐름 분석</h2></div></div>' +
       '<div class="pc-summary" id="pc-summary"><div class="pc-summary-head"><span>현재 득표 페이스 · 선택 구간 평균</span><div class="pc-tf" id="pc-tf" role="group" aria-label="분석 기간"><button data-min="30">30분</button><button data-min="60" class="selected" aria-pressed="true">1시간</button><button data-min="180">3시간</button></div></div><div class="pc-body" id="pc-body"></div><p class="pc-note">예상 역전시간은 선택 구간의 표차 추세를 선형회귀로 단순 연장한 참고치입니다. 실제 결과를 예측하거나 보장하지 않습니다.</p></div>' +
       '<div class="cd-controls"><div class="pc-summary-head"><span>표차 캔들 · 시간 흐름</span><div class="cd-tf" role="group" aria-label="봉 간격" id="cd-tf"><button data-tf="5">5분</button><button data-tf="30" class="selected" aria-pressed="true">30분</button><button data-tf="60">1시간</button></div></div><div class="cd-legend"><span><i style="background:' + UP_COLOR + '"></i>표차 확대</span><span><i style="background:' + DOWN_COLOR + '"></i>표차 축소</span><span><i style="background:' + FLAT_COLOR + ';opacity:.5"></i>관측 공백 뒤</span></div></div>' +
-      '<div class="cd-wrap" id="cd-wrap"><span class="cd-unit" id="cd-unit"></span><svg id="cd-svg" role="img" aria-label="1위와 2위 표차의 캔들차트"></svg><div class="cd-tip" id="cd-tip" role="status" hidden></div></div>' +
+      '<div class="cd-wrap" id="cd-wrap"><span class="cd-unit" id="cd-unit"></span><svg id="cd-svg" role="img" aria-label="리센느와 경쟁팀 표차의 캔들차트"></svg><div class="cd-tip" id="cd-tip" role="status" hidden></div></div>' +
       '<div class="cd-nav"><button class="quiet-button" id="cd-prev" type="button">◀ 이전</button><button class="quiet-button" id="cd-next" type="button">다음 ▶</button><button class="quiet-button" id="cd-latest" type="button">최신</button></div>' +
-      '<div class="cd-bottom"><p>표차 = 1위 − 2위 득표수. 몸통은 시가(직전 관측 표차)에서 종가(구간 마지막 표차)까지, 위·아래 선은 구간 중 최고·최저예요. 관측이 빠진 구간은 임의로 채우지 않아요. PC: 휠로 좌우 이동, Ctrl+휠로 시간축을 압축·확장. 모바일: 한 손가락 좌우 드래그로 이동, 두 손가락 핀치로 시간축을 압축·확장할 수 있어요.</p><span id="cd-range"></span></div>';
+      '<div class="cd-bottom"><p>※ 표차 = 리센느 득표수 − 리센느를 제외한 최고 득표 팀의 득표수. 리센느가 1위면 2위 팀, 리센느가 2위면 1위 팀과 비교하며 리센느가 뒤지면 표차는 음수입니다. 몸통은 시가(직전 관측 표차)에서 종가(구간 마지막 표차)까지, 위·아래 선은 구간 중 최고·최저예요. 관측이 빠진 구간은 임의로 채우지 않아요. PC: 휠로 좌우 이동, Ctrl+휠로 시간축을 압축·확장. 모바일: 한 손가락 좌우 드래그로 이동, 두 손가락 핀치로 시간축을 압축·확장할 수 있어요.</p><span id="cd-range"></span></div>';
     el.pace = root.querySelector('#pc-summary'); el.paceTf = root.querySelector('#pc-tf'); el.paceBody = root.querySelector('#pc-body');
     el.wrap = root.querySelector('#cd-wrap'); el.svg = root.querySelector('#cd-svg'); el.tip = root.querySelector('#cd-tip');
     el.unit = root.querySelector('#cd-unit'); el.range = root.querySelector('#cd-range'); el.tf = root.querySelector('#cd-tf');
