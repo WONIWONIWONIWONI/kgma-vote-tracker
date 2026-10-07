@@ -18,7 +18,7 @@
   };
   var FONT = 'DM Sans,Noto Sans KR,Apple SD Gothic Neo,Malgun Gothic,sans-serif';
 
-  var state = { touch: false, tf: '30', offset: 0, zoom: { '5': 96, '30': 48, '60': 48 }, map: {}, points: [], candles: [], base: null, endsAt: null, lastFull: 0, view: null, hover: -1 };
+  var state = { touch: false, tf: '30', paceMin: 60, offset: 0, zoom: { '5': 96, '30': 48, '60': 48 }, map: {}, points: [], candles: [], base: null, endsAt: null, lastFull: 0, view: null, hover: -1 };
   var root, el = {};
 
   /* ===== 작은 도구들 ===== */
@@ -114,6 +114,63 @@
     if (state.offset !== old) { state.hover = -1; el.tip.hidden = true; render(); }
   }
 
+  /* ===== 현재 득표 페이스 ===== */
+  function regressionSlope(rows, key) {
+    if (!rows || rows.length < 3) return NaN;
+    var t0 = rows[0].t, sx = 0, sy = 0, sxx = 0, sxy = 0, n = rows.length;
+    rows.forEach(function (p) {
+      var x = (p.t - t0) / 60000, y = key === 'gap' ? p.a - p.b : p[key];
+      sx += x; sy += y; sxx += x * x; sxy += x * y;
+    });
+    var den = n * sxx - sx * sx;
+    return den ? (n * sxy - sx * sy) / den : NaN;
+  }
+  function paceData(minutes) {
+    var pts = state.points;
+    if (pts.length < 2) return null;
+    var last = pts[pts.length - 1], cutoff = last.t - minutes * 60000;
+    var rows = pts.filter(function (p) { return p.t >= cutoff; });
+    if (rows.length < 2) return null;
+    var first = rows[0], elapsed = (last.t - first.t) / 60000;
+    if (!(elapsed > 0)) return null;
+    var aRate = (last.a - first.a) / elapsed, bRate = (last.b - first.b) / elapsed;
+    var gap0 = first.a - first.b, gap = last.a - last.b, gapChange = gap - gap0;
+    var gapRate = gapChange / elapsed, trend = regressionSlope(rows, 'gap');
+    var eta = NaN;
+    if (isFinite(trend) && trend < -0.01 && gap > 0) eta = gap / -trend;
+    return { last:last, first:first, rows:rows, elapsed:elapsed, aRate:aRate, bRate:bRate, gap:gap, gapChange:gapChange, gapRate:gapRate, trend:trend, eta:eta };
+  }
+  function rateText(v) {
+    if (!isFinite(v)) return '—';
+    var sign = v > 0 ? '+' : v < 0 ? '−' : '±';
+    return sign + Math.abs(v).toFixed(1) + '표/분';
+  }
+  function etaText(m) {
+    if (!isFinite(m) || m <= 0) return '현재 추세상 역전 없음';
+    if (m > 7 * 24 * 60) return '7일 이상';
+    var h = Math.floor(m / 60), mm = Math.round(m % 60);
+    if (h >= 24) { var d = Math.floor(h / 24); h %= 24; return '약 ' + d + '일 ' + h + '시간'; }
+    if (h) return '약 ' + h + '시간 ' + mm + '분';
+    return '약 ' + Math.max(1, mm) + '분';
+  }
+  function renderPace() {
+    if (!el.pace) return;
+    var d = paceData(state.paceMin), btns = el.paceTf.querySelectorAll('button');
+    for (var i=0;i<btns.length;i++) {
+      var on = Number(btns[i].getAttribute('data-min')) === state.paceMin;
+      btns[i].className = on ? 'selected' : ''; btns[i].setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+    if (!d) { el.paceBody.innerHTML = '<div class="pc-empty">계산할 기록이 아직 부족해요.</div>'; return; }
+    var closing = isFinite(d.trend) && d.trend < -0.01;
+    var trendLabel = closing ? '격차 축소 추세' : (d.trend > 0.01 ? '격차 확대 추세' : '격차 보합');
+    var eta = closing ? etaText(d.eta) : '현재 추세상 역전 없음';
+    el.paceBody.innerHTML =
+      '<div class="pc-team"><span>' + esc(d.last.an) + '</span><strong>' + rateText(d.aRate) + '</strong><small>최근 ' + Math.round(d.elapsed) + '분 평균</small></div>' +
+      '<div class="pc-team"><span>' + esc(d.last.bn) + '</span><strong>' + rateText(d.bRate) + '</strong><small>최근 ' + Math.round(d.elapsed) + '분 평균</small></div>' +
+      '<div class="pc-metric"><span>표차 변화</span><strong class="' + (d.gapChange < 0 ? 'down' : d.gapChange > 0 ? 'up' : '') + '">' + signed(d.gapChange) + '표</strong><small>' + rateText(d.gapRate) + '</small></div>' +
+      '<div class="pc-metric pc-eta"><span>예상 역전시간</span><strong>' + eta + '</strong><small>' + trendLabel + ' · 회귀 ' + rateText(d.trend) + '</small></div>';
+  }
+
   /* ===== 그래프 그리기 (SVG 조각 문자열) ===== */
   function chartInner(W, H, v, hover) {
     var m = v.m, ph = H - m.t - m.b, vis = v.vis, s = [];
@@ -195,6 +252,7 @@
       btns[i].setAttribute('aria-pressed', on ? 'true' : 'false');
     }
     el.unit.textContent = '1·2위 표차 (표) · ' + FRAMES[state.tf].label;
+    renderPace();
   }
 
   function showTip(i, clientX) {
@@ -345,9 +403,10 @@
       '.cd-tip>strong{display:block;font-size:10px;color:var(--muted);margin-bottom:8px;font-weight:600}' +
       '.cd-tip p{margin:5px 0;display:flex;align-items:center;justify-content:space-between;gap:18px}' +
       '.cd-tip b{font-weight:500}.cd-dim{font-size:10px;color:var(--muted);margin-top:8px}' +
-      '.cd-empty{padding:40px 0;text-align:center;color:var(--muted);font-size:12px}' +
+      '.cd-empty{padding:40px 0;text-align:center;color:var(--muted);font-size:12px}' +      '.pc-panel{margin-top:18px;padding:26px 27px 20px}.pc-tf{display:flex;gap:4px;background:#11150f;padding:4px;border-radius:7px;border:1px solid #2a3024}.pc-tf button{border:0;background:none;color:var(--muted);font-size:11px;border-radius:4px;padding:7px 11px}.pc-tf button.selected{background:#333c27;color:var(--lime)}' +
+      '.pc-body{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:22px}.pc-team,.pc-metric{background:#11150f;border:1px solid var(--line);border-radius:8px;padding:15px 16px;min-width:0}.pc-team span,.pc-metric span{display:block;color:var(--muted);font-size:10px;margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pc-team strong,.pc-metric strong{display:block;font-size:18px;font-weight:650;letter-spacing:-.02em;white-space:nowrap}.pc-team small,.pc-metric small{display:block;color:var(--muted);font-size:9px;margin-top:7px;line-height:1.4}.pc-metric strong.down{color:' + DOWN_COLOR + '}.pc-metric strong.up{color:' + UP_COLOR + '}.pc-eta strong{font-size:15px}.pc-note{margin:12px 0 0;color:var(--muted);font-size:9px;line-height:1.55}.pc-empty{grid-column:1/-1;padding:24px;text-align:center;color:var(--muted);font-size:11px}' +
       '@media(max-width:900px){.cd-panel>.panel-heading{flex-wrap:wrap;align-items:flex-start}.cd-tf{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:3px}.cd-tf button{padding:8px 4px;font-size:10px}}' +
-      '@media(max-width:760px){.cd-panel{padding:19px 16px 14px}.cd-controls{margin-top:20px}.cd-bottom{display:block}.cd-bottom>span{display:block;margin-top:7px}.cd-tip{font-size:10px;min-width:145px}}';
+      '@media(max-width:760px){.cd-panel{padding:19px 16px 14px}.pc-panel{padding:19px 16px 16px}.pc-panel>.panel-heading{flex-wrap:wrap;align-items:flex-start}.pc-tf{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:8px}.pc-tf button{padding:8px 4px;font-size:10px}.pc-body{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:16px}.pc-team,.pc-metric{padding:13px 12px}.pc-team strong,.pc-metric strong{font-size:15px}.pc-eta strong{font-size:13px}.cd-controls{margin-top:20px}.cd-bottom{display:block}.cd-bottom>span{display:block;margin-top:7px}.cd-tip{font-size:10px;min-width:145px}}';
     document.head.appendChild(st);
   }
   function build() {
@@ -361,6 +420,18 @@
       anchor.parentNode.insertBefore(root, anchor.nextSibling);
     }
     if (root.className.indexOf('cd-panel') < 0) root.className += ' cd-panel';
+    var pace = document.getElementById('pace-panel');
+    if (!pace) {
+      pace = document.createElement('section');
+      pace.id = 'pace-panel'; pace.className = 'panel pc-panel';
+      root.parentNode.insertBefore(pace, root);
+    }
+    pace.innerHTML =
+      '<div class="panel-heading"><div><div class="section-kicker">THE PACE</div><h2>현재 득표 페이스</h2></div>' +
+      '<div class="pc-tf" id="pc-tf" role="group" aria-label="분석 기간"><button data-min="30">30분</button><button data-min="60" class="selected" aria-pressed="true">1시간</button><button data-min="180">3시간</button></div></div>' +
+      '<div class="pc-body" id="pc-body"></div>' +
+      '<p class="pc-note">득표 속도는 선택 구간의 처음·마지막 관측값 기준 평균입니다. 예상 역전시간은 선택 구간의 모든 표차 관측값에 선형회귀를 적용해 현재 추세가 그대로 이어진다고 단순 가정한 참고치이며 실제 결과를 예측하거나 보장하지 않습니다.</p>';
+    el.pace = pace; el.paceTf = pace.querySelector('#pc-tf'); el.paceBody = pace.querySelector('#pc-body');
     injectStyle();
     root.innerHTML =
       '<button type="button" class="quiet-button panel-image-button" id="cd-image" aria-label="표차 캔들차트 PNG 저장" title="표차 캔들차트 PNG 저장"><span aria-hidden="true">↓</span> 이미지</button>' +
@@ -376,6 +447,10 @@
     return true;
   }
   function bind() {
+    el.paceTf.addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-min]'); if (!b) return;
+      state.paceMin = Number(b.getAttribute('data-min')) || 60; renderPace();
+    });
     el.tf.addEventListener('click', function (e) {
       var b = e.target.closest('button[data-tf]');
       if (!b) return;
