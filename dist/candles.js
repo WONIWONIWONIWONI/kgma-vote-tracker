@@ -297,29 +297,53 @@
   function exportPng() {
     var v0 = state.view;
     if (!v0 || !v0.vis.length) return;
-    var W = 1000, H = 400, HDR = 100, FTR = 36;
+    var pd = paceData(state.paceMin);
+    var W = 1000, H = 380, HDR = 238, FTR = 32;
     var v = computeView(W); v.vis = v0.vis; v.plotW = W - v.m.l - v.m.r; v.end = v0.end;
     var last = state.points[state.points.length - 1], lc = state.candles[state.candles.length - 1];
     var font = ' font-family=\'' + FONT + '\'';
     var a = v.vis[0], b = v.vis[v.vis.length - 1];
-    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + (H + HDR + FTR) + '" viewBox="0 0 ' + W + ' ' + (H + HDR + FTR) + '">' +
+    var totalH = H + HDR + FTR;
+    var paceLabel = state.paceMin === 30 ? '30분' : state.paceMin === 180 ? '3시간' : '1시간';
+    var cards = '';
+    if (pd) {
+      var closing = isFinite(pd.trend) && pd.trend < -0.01;
+      var eta = closing ? etaText(pd.eta) + ' 후 역전 페이스' : '역전 페이스 아님';
+      var trendLabel = closing ? '격차 축소 추세' : (pd.trend > 0.01 ? '격차 확대 추세' : '격차 보합');
+      var items = [
+        [pd.last.an, rateText(pd.aRate), '최근 ' + Math.round(pd.elapsed) + '분 평균', '#f2f4ee'],
+        [pd.last.bn, rateText(pd.bRate), '최근 ' + Math.round(pd.elapsed) + '분 평균', '#f2f4ee'],
+        ['표차 변화', signed(pd.gapChange) + '표', rateText(pd.gapRate), pd.gapChange < 0 ? DOWN_COLOR : pd.gapChange > 0 ? UP_COLOR : '#f2f4ee'],
+        ['현재 추세가 지속된다면', eta, trendLabel + ' · 회귀 ' + rateText(pd.trend), '#f2f4ee']
+      ];
+      items.forEach(function (it, i) {
+        var x = 28 + i * 238, y = 92, cw = 226, ch = 92;
+        cards += '<rect x="' + x + '" y="' + y + '" width="' + cw + '" height="' + ch + '" rx="7" fill="#11150f" stroke="#2a3024"/>' +
+          '<text x="' + (x+13) + '" y="' + (y+22) + '" font-size="10" fill="#929a8c"' + font + '>' + esc(it[0]) + '</text>' +
+          '<text x="' + (x+13) + '" y="' + (y+50) + '" font-size="15" font-weight="650" fill="' + it[3] + '"' + font + '>' + esc(it[1]) + '</text>' +
+          '<text x="' + (x+13) + '" y="' + (y+72) + '" font-size="9" fill="#7d8478"' + font + '>' + esc(it[2]) + '</text>';
+      });
+    }
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + totalH + '" viewBox="0 0 ' + W + ' ' + totalH + '">' +
       '<rect width="100%" height="100%" fill="#10120f"/>' +
-      '<text x="28" y="40" font-size="24" font-weight="700" fill="#f2f4ee"' + font + '>KGMA TOP 2 · 표차 캔들차트 (' + FRAMES[state.tf].label + ')</text>' +
-      '<text x="28" y="68" font-size="16" fill="#cfd5c7"' + font + '>최신 표차 ' + num(lc.c) + '표 · ' + esc(last.an) + ' ' + num(last.a) + ' vs ' + esc(last.bn) + ' ' + num(last.b) + '</text>' +
-      '<text x="28" y="90" font-size="13" fill="#9aa093"' + font + '>표시 구간 ' + md(a.t) + ' ' + hm(a.t) + ' ~ ' + md(b.t) + ' ' + hm(b.t) + ' · 원본 집계 ' + md(last.t) + ' ' + hm(last.t) + ' KST</text>' +
+      '<text x="28" y="32" font-size="19" font-weight="700" fill="#f2f4ee"' + font + '>KGMA TOP 2 · 표차 흐름 분석</text>' +
+      '<text x="28" y="55" font-size="11" fill="#9aa093"' + font + '>현재 득표 페이스 · ' + paceLabel + ' 기준  |  캔들 ' + FRAMES[state.tf].label + '</text>' +
+      '<text x="28" y="75" font-size="10" fill="#7d8478"' + font + '>최신 표차 ' + num(lc.c) + '표 · ' + esc(last.an) + ' ' + num(last.a) + ' vs ' + esc(last.bn) + ' ' + num(last.b) + '</text>' +
+      cards +
+      '<text x="28" y="207" font-size="10" fill="#9aa093"' + font + '>표차 캔들 · ' + md(a.t) + ' ' + hm(a.t) + ' ~ ' + md(b.t) + ' ' + hm(b.t) + '</text>' +
       '<g transform="translate(0,' + HDR + ')">' + chartInner(W, H, v, -1) + '</g>' +
-      '<text x="28" y="' + (H + HDR + 24) + '" font-size="12" fill="#7d8478"' + font + '><tspan fill="' + UP_COLOR + '">■</tspan> 표차 확대  <tspan fill="' + DOWN_COLOR + '">■</tspan> 표차 축소  · 팬이 만든 비공식 대시보드 · 데이터 출처 Berriz</text>' +
+      '<text x="28" y="' + (H + HDR + 21) + '" font-size="9" fill="#7d8478"' + font + '><tspan fill="' + UP_COLOR + '">■</tspan> 표차 확대  <tspan fill="' + DOWN_COLOR + '">■</tspan> 표차 축소  · 현재 추세는 선택 구간의 선형회귀를 단순 연장한 참고치 · 데이터 출처 Berriz</text>' +
       '</svg>';
     var img = new Image();
     img.onload = function () {
       var cv = document.createElement('canvas');
-      cv.width = W * 2; cv.height = (H + HDR + FTR) * 2;
+      cv.width = W * 2; cv.height = totalH * 2;
       cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
       cv.toBlob(function (blob) {
         if (!blob) return;
         var link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = 'kgma-gap-candles-' + FRAMES[state.tf].label + '.png';
+        link.download = 'kgma-gap-analysis-' + FRAMES[state.tf].label + '.png';
         document.body.appendChild(link); link.click(); link.remove();
         setTimeout(function () { URL.revokeObjectURL(link.href); }, 2000);
       }, 'image/png');
