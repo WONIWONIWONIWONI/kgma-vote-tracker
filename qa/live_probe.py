@@ -79,9 +79,8 @@ with sync_playwright() as p:
     for metric in ('votes', 'share', 'gap'):
         page.locator(f'[data-metric="{metric}"]').click()
         expected_text = page.evaluate("""() => {
-          const names=['RESCENE','RIIZE'];
           return [...document.querySelectorAll('.leader')].map((card,i)=>({
-            label:(i+1)+'위 · '+names[i],
+            label:(i+1)+'위 · '+card.querySelector('.artist-name').innerText,
             votes:card.querySelector('.vote-value').innerText+'표',
             share:card.querySelector('.share-value').innerText
           }));
