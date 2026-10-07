@@ -7,6 +7,7 @@ on:
     paths:
       - 'dist/index.html'
       - 'dist/app.js'
+      - 'dist/candles.js'
       - 'dist/hourly.js'
       - 'dist/axis.js'
       - 'dist/exports.js'
