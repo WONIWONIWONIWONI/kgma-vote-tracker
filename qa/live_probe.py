@@ -71,7 +71,7 @@ with sync_playwright() as p:
     assert refresh['width'] == 112 and refresh['height'] == 44, refresh
     assert copy['width'] == 112 and copy['height'] == 44, copy
     assert page.locator('[data-image]').count() == 3, 'Expected three panel image controls'
-    page.add_init_script("""window.probePngText=[];
+    page.evaluate("""window.probePngText=[];
       const original=CanvasRenderingContext2D.prototype.fillText;
       CanvasRenderingContext2D.prototype.fillText=function(value,...args){
         window.probePngText.push(String(value));return original.call(this,value,...args);
@@ -92,7 +92,7 @@ with sync_playwright() as p:
         download = image_download.value
         image_path = Path(download.path())
         image = image_path.read_bytes()
-        assert image.startswith(b'\\x89PNG\\r\\n\\x1a\\n'), 'Chart export is not a PNG'
+        assert image[:8] == bytes((137, 80, 78, 71, 13, 10, 26, 10)), 'Chart export is not a PNG'
         width, height = struct.unpack('>II', image[16:24])
         assert 0 < width <= 4096 and 0 < height <= 4096 and width*height <= 8000000, (width, height)
         png_text = page.evaluate('window.probePngText')
