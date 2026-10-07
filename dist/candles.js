@@ -163,12 +163,12 @@
     if (!d) { el.paceBody.innerHTML = '<div class="pc-empty">계산할 기록이 아직 부족해요.</div>'; return; }
     var closing = isFinite(d.trend) && d.trend < -0.01;
     var trendLabel = closing ? '격차 축소 추세' : (d.trend > 0.01 ? '격차 확대 추세' : '격차 보합');
-    var eta = closing ? etaText(d.eta) : '현재 추세상 역전 없음';
+    var eta = closing ? etaText(d.eta) + ' 후 역전 페이스' : '역전 페이스 아님';
     el.paceBody.innerHTML =
       '<div class="pc-team"><span>' + esc(d.last.an) + '</span><strong>' + rateText(d.aRate) + '</strong><small>최근 ' + Math.round(d.elapsed) + '분 평균</small></div>' +
       '<div class="pc-team"><span>' + esc(d.last.bn) + '</span><strong>' + rateText(d.bRate) + '</strong><small>최근 ' + Math.round(d.elapsed) + '분 평균</small></div>' +
       '<div class="pc-metric"><span>표차 변화</span><strong class="' + (d.gapChange < 0 ? 'down' : d.gapChange > 0 ? 'up' : '') + '">' + signed(d.gapChange) + '표</strong><small>' + rateText(d.gapRate) + '</small></div>' +
-      '<div class="pc-metric pc-eta"><span>예상 역전시간</span><strong>' + eta + '</strong><small>' + trendLabel + ' · 회귀 ' + rateText(d.trend) + '</small></div>';
+      '<div class="pc-metric pc-eta"><span>현재 추세</span><strong>' + eta + '</strong><small>' + trendLabel + ' · 회귀 ' + rateText(d.trend) + '</small></div>';
   }
 
   /* ===== 그래프 그리기 (SVG 조각 문자열) ===== */
@@ -403,13 +403,14 @@
       '.cd-tip>strong{display:block;font-size:10px;color:var(--muted);margin-bottom:8px;font-weight:600}' +
       '.cd-tip p{margin:5px 0;display:flex;align-items:center;justify-content:space-between;gap:18px}' +
       '.cd-tip b{font-weight:500}.cd-dim{font-size:10px;color:var(--muted);margin-top:8px}' +
-      '.cd-empty{padding:40px 0;text-align:center;color:var(--muted);font-size:12px}' +      '.pc-panel{margin-top:18px;padding:26px 27px 20px}.pc-tf{display:flex;gap:4px;background:#11150f;padding:4px;border-radius:7px;border:1px solid #2a3024}.pc-tf button{border:0;background:none;color:var(--muted);font-size:11px;border-radius:4px;padding:7px 11px}.pc-tf button.selected{background:#333c27;color:var(--lime)}' +
-      '.pc-body{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:22px}.pc-team,.pc-metric{background:#11150f;border:1px solid var(--line);border-radius:8px;padding:15px 16px;min-width:0}.pc-team span,.pc-metric span{display:block;color:var(--muted);font-size:10px;margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pc-team strong,.pc-metric strong{display:block;font-size:18px;font-weight:650;letter-spacing:-.02em;white-space:nowrap}.pc-team small,.pc-metric small{display:block;color:var(--muted);font-size:9px;margin-top:7px;line-height:1.4}.pc-metric strong.down{color:' + DOWN_COLOR + '}.pc-metric strong.up{color:' + UP_COLOR + '}.pc-eta strong{font-size:15px}.pc-note{margin:12px 0 0;color:var(--muted);font-size:9px;line-height:1.55}.pc-empty{grid-column:1/-1;padding:24px;text-align:center;color:var(--muted);font-size:11px}' +
+      '.cd-empty{padding:40px 0;text-align:center;color:var(--muted);font-size:12px}' +      '.pc-summary{margin-top:20px;padding-bottom:18px;border-bottom:1px solid var(--line)}.pc-summary-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px}.pc-summary-head>span{font-size:10px;color:var(--muted)}.pc-tf{display:flex;gap:4px;background:#11150f;padding:4px;border-radius:7px;border:1px solid #2a3024}.pc-tf button{border:0;background:none;color:var(--muted);font-size:11px;border-radius:4px;padding:7px 11px}.pc-tf button.selected{background:#333c27;color:var(--lime)}' +
+      '.pc-body{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.pc-team,.pc-metric{background:#11150f;border:1px solid var(--line);border-radius:8px;padding:15px 16px;min-width:0}.pc-team span,.pc-metric span{display:block;color:var(--muted);font-size:10px;margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.pc-team strong,.pc-metric strong{display:block;font-size:18px;font-weight:650;letter-spacing:-.02em;white-space:nowrap}.pc-team small,.pc-metric small{display:block;color:var(--muted);font-size:9px;margin-top:7px;line-height:1.4}.pc-metric strong.down{color:' + DOWN_COLOR + '}.pc-metric strong.up{color:' + UP_COLOR + '}.pc-eta strong{font-size:15px}.pc-note{margin:12px 0 0;color:var(--muted);font-size:9px;line-height:1.55}.pc-empty{grid-column:1/-1;padding:24px;text-align:center;color:var(--muted);font-size:11px}' +
       '@media(max-width:900px){.cd-panel>.panel-heading{flex-wrap:wrap;align-items:flex-start}.cd-tf{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:3px}.cd-tf button{padding:8px 4px;font-size:10px}}' +
-      '@media(max-width:760px){.cd-panel{padding:19px 16px 14px}.pc-panel{padding:19px 16px 16px}.pc-panel>.panel-heading{flex-wrap:wrap;align-items:flex-start}.pc-tf{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:8px}.pc-tf button{padding:8px 4px;font-size:10px}.pc-body{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:16px}.pc-team,.pc-metric{padding:13px 12px}.pc-team strong,.pc-metric strong{font-size:15px}.pc-eta strong{font-size:13px}.cd-controls{margin-top:20px}.cd-bottom{display:block}.cd-bottom>span{display:block;margin-top:7px}.cd-tip{font-size:10px;min-width:145px}}';
+      '@media(max-width:760px){.cd-panel{padding:19px 16px 14px}.pc-summary-head{align-items:flex-start;flex-wrap:wrap}.pc-tf{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.pc-tf button{padding:8px 4px;font-size:10px}.pc-body{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.pc-team,.pc-metric{padding:13px 12px}.pc-team strong,.pc-metric strong{font-size:15px}.pc-eta strong{font-size:13px}.cd-controls{margin-top:20px}.cd-bottom{display:block}.cd-bottom>span{display:block;margin-top:7px}.cd-tip{font-size:10px;min-width:145px}}';
     document.head.appendChild(st);
   }
   function build() {
+    var oldPace = document.getElementById('pace-panel'); if (oldPace) oldPace.remove();
     root = document.getElementById('candle-panel');
     if (!root) {
       var anchor = document.querySelector('.chart-panel');
@@ -420,27 +421,16 @@
       anchor.parentNode.insertBefore(root, anchor.nextSibling);
     }
     if (root.className.indexOf('cd-panel') < 0) root.className += ' cd-panel';
-    var pace = document.getElementById('pace-panel');
-    if (!pace) {
-      pace = document.createElement('section');
-      pace.id = 'pace-panel'; pace.className = 'panel pc-panel';
-      root.parentNode.insertBefore(pace, root);
-    }
-    pace.innerHTML =
-      '<div class="panel-heading"><div><div class="section-kicker">THE PACE</div><h2>현재 득표 페이스</h2></div>' +
-      '<div class="pc-tf" id="pc-tf" role="group" aria-label="분석 기간"><button data-min="30">30분</button><button data-min="60" class="selected" aria-pressed="true">1시간</button><button data-min="180">3시간</button></div></div>' +
-      '<div class="pc-body" id="pc-body"></div>' +
-      '<p class="pc-note">득표 속도는 선택 구간의 처음·마지막 관측값 기준 평균입니다. 예상 역전시간은 선택 구간의 모든 표차 관측값에 선형회귀를 적용해 현재 추세가 그대로 이어진다고 단순 가정한 참고치이며 실제 결과를 예측하거나 보장하지 않습니다.</p>';
-    el.pace = pace; el.paceTf = pace.querySelector('#pc-tf'); el.paceBody = pace.querySelector('#pc-body');
     injectStyle();
     root.innerHTML =
       '<button type="button" class="quiet-button panel-image-button" id="cd-image" aria-label="표차 캔들차트 PNG 저장" title="표차 캔들차트 PNG 저장"><span aria-hidden="true">↓</span> 이미지</button>' +
-      '<div class="panel-heading"><div><div class="section-kicker">THE CANDLES</div><h2 id="cd-title">표차 캔들차트</h2></div>' +
-      '<div class="cd-tf" role="group" aria-label="봉 간격" id="cd-tf"><button data-tf="5">5분</button><button data-tf="30" class="selected" aria-pressed="true">30분</button><button data-tf="60">1시간</button></div></div>' +
-      '<div class="cd-controls"><div class="cd-legend"><span><i style="background:' + UP_COLOR + '"></i>표차 확대</span><span><i style="background:' + DOWN_COLOR + '"></i>표차 축소</span><span><i style="background:' + FLAT_COLOR + ';opacity:.5"></i>관측 공백 뒤</span></div></div>' +
+      '<div class="panel-heading"><div><div class="section-kicker">GAP ANALYSIS</div><h2 id="cd-title">표차 흐름 분석</h2></div></div>' +
+      '<div class="pc-summary" id="pc-summary"><div class="pc-summary-head"><span>현재 득표 페이스 · 선택 구간 평균</span><div class="pc-tf" id="pc-tf" role="group" aria-label="분석 기간"><button data-min="30">30분</button><button data-min="60" class="selected" aria-pressed="true">1시간</button><button data-min="180">3시간</button></div></div><div class="pc-body" id="pc-body"></div><p class="pc-note">예상 역전시간은 선택 구간의 표차 추세를 선형회귀로 단순 연장한 참고치입니다. 실제 결과를 예측하거나 보장하지 않습니다.</p></div>' +
+      '<div class="cd-controls"><div class="pc-summary-head"><span>표차 캔들 · 시간 흐름</span><div class="cd-tf" role="group" aria-label="봉 간격" id="cd-tf"><button data-tf="5">5분</button><button data-tf="30" class="selected" aria-pressed="true">30분</button><button data-tf="60">1시간</button></div></div><div class="cd-legend"><span><i style="background:' + UP_COLOR + '"></i>표차 확대</span><span><i style="background:' + DOWN_COLOR + '"></i>표차 축소</span><span><i style="background:' + FLAT_COLOR + ';opacity:.5"></i>관측 공백 뒤</span></div></div>' +
       '<div class="cd-wrap" id="cd-wrap"><span class="cd-unit" id="cd-unit"></span><svg id="cd-svg" role="img" aria-label="1위와 2위 표차의 캔들차트"></svg><div class="cd-tip" id="cd-tip" role="status" hidden></div></div>' +
       '<div class="cd-nav"><button class="quiet-button" id="cd-prev" type="button">◀ 이전</button><button class="quiet-button" id="cd-next" type="button">다음 ▶</button><button class="quiet-button" id="cd-latest" type="button">최신</button></div>' +
       '<div class="cd-bottom"><p>표차 = 1위 − 2위 득표수. 몸통은 시가(직전 관측 표차)에서 종가(구간 마지막 표차)까지, 위·아래 선은 구간 중 최고·최저예요. 관측이 빠진 구간은 임의로 채우지 않아요. PC: 휠로 좌우 이동, Ctrl+휠로 시간축을 압축·확장. 모바일: 한 손가락 좌우 드래그로 이동, 두 손가락 핀치로 시간축을 압축·확장할 수 있어요.</p><span id="cd-range"></span></div>';
+    el.pace = root.querySelector('#pc-summary'); el.paceTf = root.querySelector('#pc-tf'); el.paceBody = root.querySelector('#pc-body');
     el.wrap = root.querySelector('#cd-wrap'); el.svg = root.querySelector('#cd-svg'); el.tip = root.querySelector('#cd-tip');
     el.unit = root.querySelector('#cd-unit'); el.range = root.querySelector('#cd-range'); el.tf = root.querySelector('#cd-tf');
     el.prev = root.querySelector('#cd-prev'); el.next = root.querySelector('#cd-next'); el.latest = root.querySelector('#cd-latest');
