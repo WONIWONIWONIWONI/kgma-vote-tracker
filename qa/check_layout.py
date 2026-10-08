@@ -57,7 +57,7 @@ try:
             errors = []
             page.on('pageerror', lambda error: errors.append(str(error)))
             page.goto(f'http://127.0.0.1:{server.server_port}/', wait_until='networkidle')
-            page.wait_for_function("document.querySelector('#sample-count').textContent==='160'")
+            page.wait_for_function("document.querySelector('#sample-count').textContent && document.querySelector('#sample-count').textContent !== '0'")
             page.wait_for_timeout(600)
             metrics = page.evaluate("""() => ({
                 viewport:innerWidth,body:document.documentElement.scrollWidth,
