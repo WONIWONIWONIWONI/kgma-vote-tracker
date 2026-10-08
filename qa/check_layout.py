@@ -73,6 +73,24 @@ try:
             assert metrics['viewport'] == width, metrics
             assert metrics['body'] <= width, metrics
             assert not metrics['overlapping'], metrics
+            # Check all candle intervals and their exports at every supported width.
+            assert page.locator('#cd-tf button').all_inner_texts() == ['5분', '1시간', '6시간']
+            for frame, label in (('5', '5분봉'), ('60', '1시간봉'), ('360', '6시간봉')):
+                button = page.locator(f'#cd-tf [data-tf="{frame}"]')
+                button.click()
+                assert button.get_attribute('aria-pressed') == 'true'
+                assert page.locator('#cd-tf [aria-pressed="true"]').count() == 1
+                assert page.locator('#cd-unit').inner_text().endswith(label)
+                assert page.locator('#cd-svg rect').count() > 0
+                assert 'NaN' not in page.locator('#cd-svg').inner_html()
+                if width == 390:
+                    with page.expect_download() as download:
+                        page.locator('#cd-image').click()
+                    raw = Path(download.value.path()).read_bytes()
+                    assert download.value.suggested_filename == f'kgma-gap-analysis-{label}.png'
+                    assert raw.startswith(b'\x89PNG') and len(raw) > 3000
+                    assert struct.unpack('>II', raw[16:24]) == (2000, 1300)
+            page.locator('#cd-tf [data-tf="60"]').click()
             assert page.locator('.gaps-panel, #gap-list').count() == 0
             assert page.locator('.hero-right #copy-button').count() == 1
             assert page.locator('.hero-right [data-image], #png-button').count() == 0
