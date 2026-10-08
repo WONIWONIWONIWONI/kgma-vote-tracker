@@ -1,5 +1,5 @@
 /* 표차 캔들차트 — dist/candles.js
- * 리센느−경쟁팀 표차를 주식 캔들(5분봉·30분봉·1시간봉)로 보여줍니다.
+ * 리센느−경쟁팀 표차를 주식 캔들(5분봉·1시간봉·6시간봉)로 보여줍니다.
  * 기존 app.js 는 건드리지 않고, 이 파일이 스스로 기록(history.json)을 읽어 그립니다. */
 (function () {
   'use strict';
@@ -13,12 +13,12 @@
   var POLL_MS = 45000; // RESCENE-relative gap chart
   var FRAMES = {
     '5': { min: 5, label: '5분봉', show: 72 },
-    '30': { min: 30, label: '30분봉', show: 48 },
-    '60': { min: 60, label: '1시간봉', show: 48 }
+    '60': { min: 60, label: '1시간봉', show: 48 },
+    '360': { min: 360, label: '6시간봉', show: 28 }
   };
   var FONT = 'DM Sans,Noto Sans KR,Apple SD Gothic Neo,Malgun Gothic,sans-serif';
 
-  var state = { touch: false, tf: '30', paceMin: 60, offset: 0, zoom: { '5': 96, '30': 48, '60': 48 }, map: {}, points: [], candles: [], base: null, endsAt: null, lastFull: 0, view: null, hover: -1 };
+  var state = { touch: false, tf: '60', paceMin: 60, offset: 0, zoom: { '5': 96, '60': 48, '360': 28 }, map: {}, points: [], candles: [], base: null, endsAt: null, lastFull: 0, view: null, hover: -1 };
   var root, el = {};
 
   /* ===== 작은 도구들 ===== */
@@ -196,7 +196,7 @@
     });
 
     var size = FRAMES[state.tf].min * 60000;
-    var steps = state.tf === '5' ? [3, 6, 12, 24] : state.tf === '30' ? [2, 4, 6, 12] : [1, 2, 3, 4, 6, 12], want = Math.ceil(42 / slot), k = steps[steps.length - 1];
+    var steps = state.tf === '5' ? [3, 6, 12, 24] : state.tf === '60' ? [1, 2, 3, 4, 6, 12] : [1, 2, 3, 4], want = Math.ceil(42 / slot), k = steps[steps.length - 1];
     for (var q = 0; q < steps.length; q++) { if (steps[q] >= want) { k = steps[q]; break; } }
     var lastDay = -1;
     vis.forEach(function (c, i) {
@@ -457,7 +457,7 @@
       '<button type="button" class="quiet-button panel-image-button" id="cd-image" aria-label="표차 캔들차트 PNG 저장" title="표차 캔들차트 PNG 저장"><span aria-hidden="true">↓</span> 이미지</button>' +
       '<div class="panel-heading"><div><div class="section-kicker">GAP ANALYSIS</div><h2 id="cd-title">표차 흐름 분석</h2></div></div>' +
       '<div class="pc-summary" id="pc-summary"><div class="pc-summary-head"><span>현재 득표 페이스 · 선택 구간 평균</span><div class="pc-tf" id="pc-tf" role="group" aria-label="분석 기간"><button data-min="30">30분</button><button data-min="60" class="selected" aria-pressed="true">1시간</button><button data-min="180">3시간</button></div></div><div class="pc-body" id="pc-body"></div><p class="pc-note">예상 역전시간은 선택 구간의 표차 추세를 선형회귀로 단순 연장한 참고치입니다. 실제 결과를 예측하거나 보장하지 않습니다.</p></div>' +
-      '<div class="cd-controls"><div class="pc-summary-head"><span>표차 캔들 · 시간 흐름</span><div class="cd-tf" role="group" aria-label="봉 간격" id="cd-tf"><button data-tf="5">5분</button><button data-tf="30" class="selected" aria-pressed="true">30분</button><button data-tf="60">1시간</button></div></div><div class="cd-legend"><span><i style="background:' + UP_COLOR + '"></i>표차 확대</span><span><i style="background:' + DOWN_COLOR + '"></i>표차 축소</span><span><i style="background:' + FLAT_COLOR + ';opacity:.5"></i>관측 공백 뒤</span></div></div>' +
+      '<div class="cd-controls"><div class="pc-summary-head"><span>표차 캔들 · 시간 흐름</span><div class="cd-tf" role="group" aria-label="봉 간격" id="cd-tf"><button data-tf="5">5분</button><button data-tf="60" class="selected" aria-pressed="true">1시간</button><button data-tf="360">6시간</button></div></div><div class="cd-legend"><span><i style="background:' + UP_COLOR + '"></i>표차 확대</span><span><i style="background:' + DOWN_COLOR + '"></i>표차 축소</span><span><i style="background:' + FLAT_COLOR + ';opacity:.5"></i>관측 공백 뒤</span></div></div>' +
       '<div class="cd-wrap" id="cd-wrap"><span class="cd-unit" id="cd-unit"></span><svg id="cd-svg" role="img" aria-label="리센느와 경쟁팀 표차의 캔들차트"></svg><div class="cd-tip" id="cd-tip" role="status" hidden></div></div>' +
       '<div class="cd-nav"><button class="quiet-button" id="cd-prev" type="button">◀ 이전</button><button class="quiet-button" id="cd-next" type="button">다음 ▶</button><button class="quiet-button" id="cd-latest" type="button">최신</button></div>' +
       '<div class="cd-bottom"><p>※ 표차 = 리센느 득표수 − 리센느를 제외한 최고 득표 팀의 득표수. 리센느가 1위면 2위 팀, 리센느가 2위면 1위 팀과 비교하며 리센느가 뒤쳐지면 표차는 음수입니다. 몸통은 시가(직전 관측 표차)에서 종가(구간 마지막 표차)까지, 위·아래 선은 구간 중 최고·최저예요. 관측이 빠진 구간은 임의로 채우지 않아요. PC: 휠로 좌우 이동, Ctrl+휠로 시간축을 압축·확장. 모바일: 한 손가락 좌우 드래그로 이동, 두 손가락 핀치로 시간축을 압축·확장할 수 있어요.</p><span id="cd-range"></span></div>';
