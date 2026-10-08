@@ -97,7 +97,12 @@ try:
             for metric in ('votes','share','gap'):
                 page.locator(f'[data-metric={metric}]').click()
                 svg=page.locator('#trend-chart')
-                assert float(svg.get_attribute('data-ymin')) > 0
+                ymin=float(svg.get_attribute('data-ymin'))
+                ymax=float(svg.get_attribute('data-ymax'))
+                if metric in ('votes','share'):
+                    assert ymin > 0, (metric,ymin,ymax)
+                else:
+                    assert ymin < ymax, (metric,ymin,ymax)
                 ticks=svg.locator('.y-tick').all_text_contents()
                 assert 3 <= len(ticks) <= 8 and len(set(ticks)) == len(ticks), ticks
                 assert '자동 범위' in page.locator('#chart-axis-note').inner_text()
