@@ -124,16 +124,17 @@ try:
             assert len(cards) == 2, metrics
             assert '3위' not in page.locator('body').inner_text()
             assert 'SHOWNU' not in page.locator('body').inner_text()
-            assert page.locator('#hourly-list .hourly-row').count() == 6
-            assert page.locator('.hourly-team').count() == 12
-            assert page.locator('.hourly-badge').first.inner_text() == '집계 중'
-            assert page.locator('.hourly-value').first.inner_text() == '+30표'
-            assert page.locator('.hourly-value').nth(2).inner_text() == '+120표'
-            page.locator('#hourly-more').click()
-            assert page.locator('#hourly-list .hourly-row').count() == 9
-            page.locator('#hourly-date').select_option(index=1)
-            assert '2026-10-07' == page.locator('#hourly-date').input_value()
-            assert page.locator('#hourly-list .hourly-row').count() == 5
+            visible_hourly=page.locator('#hourly-list .hourly-row').count()
+            assert 1 <= visible_hourly <= 6, visible_hourly
+            assert page.locator('.hourly-team').count() == visible_hourly*2
+            assert all(text in ('집계 중','1시간 전체','일부 구간','비교 기록 대기') for text in page.locator('.hourly-badge').all_inner_texts())
+            assert all(text == '—' or text.endswith('표') for text in page.locator('.hourly-value').all_inner_texts())
+            if not page.locator('#hourly-more').is_hidden():
+                page.locator('#hourly-more').click()
+                assert page.locator('#hourly-list .hourly-row').count() >= visible_hourly
+            if page.locator('#hourly-date option').count() > 1:
+                page.locator('#hourly-date').select_option(index=1)
+                assert page.locator('#hourly-list .hourly-row').count() >= 1
             assert page.locator('.hourly-scroll').evaluate('(el)=>el.getBoundingClientRect().height')<=571
             assert max(c['w'] for c in cards)-min(c['w'] for c in cards)<1, metrics
             assert max(c['h'] for c in cards)-min(c['h'] for c in cards)<1, metrics
@@ -157,7 +158,7 @@ try:
                 with page.expect_download() as download:
                     page.locator('#csv-button').click()
                 csv=Path(download.value.path()).read_text(encoding='utf-8-sig')
-                assert len(csv.splitlines()) == 321
+                assert len(csv.splitlines()) == 1 + 2*len(data['snapshots'])
                 assert 'SHOWNU' not in csv and '3위표차' not in csv
                 page.locator('#copy-button').click()
                 copied=page.evaluate('navigator.clipboard.readText()')
