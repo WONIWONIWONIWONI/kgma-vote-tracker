@@ -38,6 +38,8 @@ class NewTrackerTests(unittest.TestCase):
             self.assertNotIn('/RESCENE|리센느/i', candle)
             workflow = (out / '.github/workflows/collect-and-publish.yml').read_text(encoding='utf-8')
             self.assertIn("vars.COLLECT_ENABLED == 'true'", workflow)
+            publish = (out / '.github/workflows/publish.yml').read_text(encoding='utf-8')
+            self.assertIn("vars.PUBLISH_ENABLED == 'true'", publish)
             blocked = subprocess.run([sys.executable, 'collector/prepare_site.py'], cwd=out,
                                      capture_output=True, text=True)
             self.assertNotEqual(blocked.returncode, 0)
