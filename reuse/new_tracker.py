@@ -233,6 +233,8 @@ def read_snapshot():
                 workflow = workflow.replace("vars.COLLECT_ENABLED != 'false'", "vars.COLLECT_ENABLED == 'true'")
             else:
                 # The original visual QA is tailored to KGMA names; run it only after adapting it to this vote.
+                workflow = workflow.replace('if: github.event.repository.private == false',
+                                            "if: github.event.repository.private == false && vars.PUBLISH_ENABLED == 'true'")
                 workflow = workflow.replace('      - run: pip install -r collector/requirements.txt\n', '')
                 workflow = workflow.replace("      - uses: actions/setup-python@v5\n        with:\n          python-version: '3.12'\n          cache: pip\n          cache-dependency-path: collector/requirements.txt\n", '')
                 workflow = workflow.replace("      - uses: actions/cache/restore@v4\n        with:\n          path: ~/.cache/ms-playwright\n          key: ${{ runner.os }}-playwright-${{ hashFiles('collector/requirements.txt') }}\n", '')
@@ -279,7 +281,7 @@ class SourceContract(unittest.TestCase):
 1. `collector/source_adapter.py`에 공개 순위의 실제 데이터 읽기를 구현합니다. 로그인이나 접근 제한이 필요하면 우회하지 않습니다. 반드시 **원본 집계 시각**, 전체 투표수, 상위 2팀의 안정적인 ID, 표수와 표시 점유율을 확인하세요.
 2. `python -m unittest discover -s collector -p 'test_*.py'` 및 실제 응답의 저장 예제로 `python collector/collect.py --fixture /path/to/real_observation.json`을 검증합니다. fixture는 최초 관측으로 저장되니 실제 검증된 값만 사용하세요.
 3. `python collector/prepare_site.py`가 통과하는지 확인하고, 모바일 화면과 이미지 파일의 제목·표차를 확인합니다. 첫 관측이 없어도 사이트가 공개되도록 변경하지 마세요.
-4. 이 폴더를 별도의 공개 저장소 `{args.repository}`의 `main`에 올리고 Pages의 Source를 GitHub Actions로 지정합니다. Publish 워크플로를 수동 실행해 사이트를 배포합니다.
+4. 이 폴더를 별도의 공개 저장소 `{args.repository}`의 `main`에 올리고 Pages의 Source를 GitHub Actions로 지정합니다. 검증된 첫 관측 이후 저장소 Actions variable `PUBLISH_ENABLED=true`를 지정하고 Publish 워크플로를 수동 실행해 사이트를 배포합니다. 그 전에는 게시 작업도 실행되지 않습니다.
 5. 데이터 검증과 사이트 검증이 끝난 뒤에만 저장소 Actions variable `COLLECT_ENABLED=true`를 지정하고 Collect 워크플로를 실행합니다. 수집 작업은 기본적으로 켜지지 않습니다. 종료 시각은 `{end_at}`이며, 종료 뒤 워크플로 예약이 비활성화됩니다.
 
 원본 API 또는 페이지 구조가 달라지면 `collector/source_adapter.py`만 연결합니다. `dist/`의 그래프·표·PNG·CSV UI는 보존됩니다. 대상 팀 ID `{target_id}`가 현재 상위 두 팀에 없으면 대상 팀의 표차 관측값은 표시되지 않습니다. 시간별 증가량도 상위 두 팀 기록에 한합니다. 이 한계가 맞지 않는 투표는 수집 스키마와 화면을 함께 조정해야 합니다.\n''')
