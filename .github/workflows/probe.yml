@@ -4,11 +4,15 @@ on:
   push:
     branches: [main]
     paths: ['qa/live_probe.py', '.github/workflows/probe.yml']
+  workflow_run:
+    workflows: ['Publish KGMA dashboard']
+    types: [completed]
+    branches: [main]
 permissions:
   contents: read
 jobs:
   probe:
-    if: github.event.repository.private == false
+    if: github.event.repository.private == false && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
