@@ -40,6 +40,7 @@ try:
         for width in (320, 360, 390, 430, 768, 1280):
             context = browser.new_context(viewport={'width':width, 'height':844},
                                           is_mobile=width<=430, device_scale_factor=1)
+            context.route('**/data/history.json*', lambda route: route.fulfill(content_type='application/json', body=json.dumps(data)))
             context.route('https://raw.githubusercontent.com/**', lambda route: route.fulfill(
                 content_type='application/json', body=json.dumps(data)))
             # Keep the seed and feed on the same fixture timeline as real records grow.

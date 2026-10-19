@@ -1,12 +1,15 @@
 """Verify the closed public archive without requesting the Berriz source."""
 from datetime import datetime, timezone
 import json
+import os
 import time
 from urllib.request import Request, urlopen
 from playwright.sync_api import sync_playwright
 
 SITE = 'https://woniwoniwoniwoni.github.io/kgma-vote-tracker/'
-RAW = 'https://raw.githubusercontent.com/WONIWONIWONIWONI/kgma-vote-tracker/main/dist/data/'
+REPOSITORY_RAW = 'https://raw.githubusercontent.com/WONIWONIWONIWONI/kgma-vote-tracker/'
+# An immutable revision avoids stale /main CDN responses at the voting cutoff.
+RAW = REPOSITORY_RAW + os.environ['GITHUB_SHA'] + '/dist/data/'
 API = 'https://api.github.com/repos/WONIWONIWONIWONI/kgma-vote-tracker/'
 END = datetime(2026, 10, 19, 15, 0, tzinfo=timezone.utc)
 deadline = time.monotonic() + 300
@@ -38,7 +41,7 @@ def wait_for(check, label):
 
 
 # Retain a baseline of every record available when this check starts.
-baseline = read_json(RAW + 'history.json')
+baseline = read_json(REPOSITORY_RAW + '8f3a45027311c1fabb1a3f4d842d0f4f3fa91002/dist/data/history.json')
 while datetime.now(timezone.utc) < END:
     remaining = (END - datetime.now(timezone.utc)).total_seconds()
     print('Waiting for the configured voting cutoff; collection remains enabled.', flush=True)
@@ -73,6 +76,11 @@ workflow = wait_for(collector_disabled, 'Collector workflow disable')
 
 
 def deployed_archive():
+    request = Request(SITE + '?archive_check=' + str(time.time_ns()), headers={'Cache-Control': 'no-cache'})
+    with urlopen(request, timeout=15) as response:
+        html = response.read().decode('utf-8')
+    if 'app.js?v=20261020-archive-local' not in html:
+        return None
     archived = read_json(SITE + 'data/history.json')
     if archived.get('collector', {}).get('state') != 'stopped':
         return None
@@ -97,6 +105,7 @@ with sync_playwright() as p:
     page.wait_for_function("expected => document.querySelector('#sample-count').textContent.replaceAll(',','') === String(expected)",
                            arg=len(rows))
     assert '마지막 관측값' in page.locator('#notice-text').inner_text()
+    assert not feed_requests, 'Final archive must load its same-origin preserved data'
     assert page.locator('#trend-chart path').count() >= 1
     assert page.locator('#cd-svg rect').count() >= 1
     page.locator('#history-details summary').click()

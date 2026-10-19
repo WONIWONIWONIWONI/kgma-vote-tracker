@@ -10,6 +10,9 @@
   var FLAT_COLOR = '#8f968a';  // 변화 없음
   var RAW = 'https://raw.githubusercontent.com/WONIWONIWONIWONI/kgma-vote-tracker/main/';
   var HISTORY_URLS = [RAW + 'dist/data/history.json', './data/history.json', RAW + 'data/history.json'];
+  if (window.KGMA_SEED && window.KGMA_SEED.collector && window.KGMA_SEED.collector.state === 'stopped') {
+    HISTORY_URLS = ['./data/history.json', RAW + 'dist/data/history.json', RAW + 'data/history.json'];
+  }
   var POLL_MS = 45000; // RESCENE-relative gap chart
   var VOTING_END = Date.parse('2026-10-19T15:00:00Z');
   var pollTimer;

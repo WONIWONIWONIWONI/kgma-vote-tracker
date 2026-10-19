@@ -156,7 +156,8 @@
     state.fetching=true;state.lastCheckedAt=Date.now();$('refresh-button').disabled=true;
     try{
       let candidate;
-      if(!state.historyLoaded){candidate=await fetchRecord(liveHistoryURL,manual);}
+      const archived=collectionStopped()&&window.KGMA_SEED.collector?.state==='stopped';
+      if(archived||!state.historyLoaded){candidate=await fetchRecord(archived?new URL('./data/history.json',location.href).href:liveHistoryURL,manual);}
       else{
         const recent=checkNewer(await fetchRecord(liveLatestURL,manual));
         candidate=mergeRecent(state.data,recent);
