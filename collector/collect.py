@@ -159,7 +159,7 @@ def collect_once(fixture=None, until=None):
     migrated = migrate_top2(data)
     collector = data.setdefault('collector', {})
     previous_state = collector.get('state')
-    needs_format_update = migrated or 'historyCount' not in data or 'operation' not in data or not (HISTORY.parent/'latest.json').exists()
+    needs_format_update = migrated or 'historyCount' not in data or data.get('operation') != operation(until) or not (HISTORY.parent/'latest.json').exists()
     data['operation'] = operation(until)
     collector.update(lastAttemptAt=utc_now(), intervalSeconds=300)
     if datetime.now(timezone.utc) >= end_at(until):
@@ -170,6 +170,13 @@ def collect_once(fixture=None, until=None):
         return 0
     try:
         snapshot = parse_text(Path(fixture).read_text(encoding='utf-8')) if fixture else load_public_snapshot()
+        # An API request begun before midnight may finish after the cutoff.
+        # Preserve the previous observations instead of adding a late result.
+        if datetime.now(timezone.utc) >= end_at(until):
+            collector.update(state='stopped', error=None)
+            save(data)
+            print('Voting closed during the request; previous records preserved.')
+            return 0
         added = append_snapshot(data, snapshot)
         collector.update(state='ok', lastSuccessAt=utc_now(), error=None)
         if added or previous_state != 'ok' or needs_format_update:

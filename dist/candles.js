@@ -11,6 +11,8 @@
   var RAW = 'https://raw.githubusercontent.com/WONIWONIWONIWONI/kgma-vote-tracker/main/';
   var HISTORY_URLS = [RAW + 'dist/data/history.json', './data/history.json', RAW + 'data/history.json'];
   var POLL_MS = 45000; // RESCENE-relative gap chart
+  var VOTING_END = Date.parse('2026-10-19T15:00:00Z');
+  var pollTimer;
   var FRAMES = {
     '5': { min: 5, label: '5분봉', show: 72 },
     '60': { min: 60, label: '1시간봉', show: 48 },
@@ -18,7 +20,7 @@
   };
   var FONT = 'DM Sans,Noto Sans KR,Apple SD Gothic Neo,Malgun Gothic,sans-serif';
 
-  var state = { touch: false, tf: '60', paceMin: 60, offset: 0, zoom: { '5': 96, '60': 48, '360': 28 }, map: {}, points: [], candles: [], base: null, endsAt: null, lastFull: 0, view: null, hover: -1 };
+  var state = { touch: false, tf: '60', paceMin: 60, offset: 0, zoom: { '5': 96, '60': 48, '360': 28 }, map: {}, points: [], candles: [], base: null, endsAt: VOTING_END, stopped: false, lastFull: 0, view: null, hover: -1 };
   var root, el = {};
 
   /* ===== 작은 도구들 ===== */
@@ -360,6 +362,10 @@
   }
 
   /* ===== 기록 읽기 · 갱신 ===== */
+  function readOperation(data) {
+    state.endsAt = Math.min(VOTING_END, Date.parse(data.operation && data.operation.endsAt) || VOTING_END);
+    state.stopped = !!(data.collector && data.collector.state === 'stopped');
+  }
   function addSnaps(list) {
     var added = 0;
     list.forEach(function (s) {
@@ -388,18 +394,19 @@
     return loadHistory(0).then(function (res) {
       state.base = res.url.replace(/history\.json$/, '');
       state.lastFull = Date.now();
-      if (res.json.operation && res.json.operation.endsAt) state.endsAt = Date.parse(res.json.operation.endsAt);
+      readOperation(res.json);
       addSnaps(res.json.snapshots);
       rebuild(); render();
     });
   }
   function poll() {
+    if (state.stopped || Date.now() >= state.endsAt) { clearInterval(pollTimer); return; }
     if (document.hidden || !state.base) return;
-    if (state.endsAt && Date.now() > state.endsAt + 600000) return;
     fetch(state.base + 'latest.json?t=' + Date.now(), { cache: 'no-store' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (j) {
         if (!j) return;
+        readOperation(j);
         var arr = Array.isArray(j) ? j : (j.snapshots || j.latest || []);
         if (!arr.length) return;
         var lastKnown = state.points.length ? state.points[state.points.length - 1].t : 0;
@@ -606,7 +613,7 @@
       msg.textContent = '기록을 불러오지 못했어요. 잠시 후 새로고침해 주세요.';
       el.wrap.appendChild(msg);
     });
-    setInterval(poll, POLL_MS);
+    if (Date.now() < state.endsAt) pollTimer = setInterval(poll, POLL_MS);
     document.addEventListener('visibilitychange', function () { if (!document.hidden) poll(); });
   }
 

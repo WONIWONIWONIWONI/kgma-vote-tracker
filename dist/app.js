@@ -37,15 +37,32 @@
   const liveHistoryURL = 'https://raw.githubusercontent.com/WONIWONIWONIWONI/kgma-vote-tracker/main/dist/data/history.json';
   const liveLatestURL=liveHistoryURL.replace('history.json','latest.json');
   const refreshEvery=300000,refreshOffset=145000,retryEvery=20000;
-  const operationEnd=()=>Date.parse(state.data.operation?.endsAt||'2026-10-20T15:45:00Z');
+  const votingEnd=Date.parse('2026-10-19T15:00:00Z');
+  // Old deployed data must never extend the newly configured voting deadline.
+  const operationEnd=()=>Math.min(votingEnd,Date.parse(state.data.operation?.endsAt)||votingEnd);
+  const collectionStopped=()=>state.data.collector?.state==='stopped'||Date.now()>=operationEnd();
   const latest = () => state.data.snapshots.at(-1);
   function previousObservation(){return state.data.snapshots.at(-2)||null;}
   function getSeries() {return state.metric==='gap'?gapDefs:latest().top2.map(t=>({id:t.id,name:t.name,color:colorOf(t)}));}
   function getValue(s,series) {if(state.metric==='gap')return resceneGap(s);const team=s.top2.find(t=>t.id===series.id);return team?(state.metric==='share'?share(team,s):team.votes):null;}
   function windowSnapshots(){const all=state.data.snapshots;if(state.range==='all')return all;const min=Date.parse(latest().sourceAt)-Number(state.range)*3600000;return all.filter(s=>Date.parse(s.sourceAt)>=min);}
   function change(v,digits=0){return `${v>0?'+':v<0?'−':''}${digits?Math.abs(v).toFixed(digits):fmt(Math.abs(v))}`;}
-  function status(){const last=latest();const capture=last.origin==='user_capture';const stale=Date.now()-Date.parse(last.sourceAt)>10*60000;const failed=state.data.collector?.state==='error';const stopped=state.data.collector?.state==='stopped'||Date.now()>=operationEnd();$('status-pill').className='status-pill '+(capture?'':stale||failed||stopped?'stale':'live');$('status-label').textContent=capture?'캡처 기록':failed?'수집 오류':stopped?'수집 종료':stale?'갱신 지연':'최근 수집 확인';$('source-time').textContent=kst(last.sourceAt);$('collected-time').textContent=last.collectedAt?`수집 ${kst(last.collectedAt,'time')}`:'';let note=capture?'첨부 화면의 실제 수치 1건입니다. 자동 수집 연결 전이며, 기록이 더 쌓이면 추이선이 표시됩니다.':failed?'최근 수집에 실패했습니다. 마지막으로 확인한 기록을 표시하며, 누락된 값은 채우지 않습니다.':stopped?'설정된 수집 기간이 끝났습니다. 마지막으로 저장된 기록을 표시합니다.':stale?'원본 집계 시각이 10분 이상 지났습니다. 아래 집계 시각의 수치를 표시합니다.':'매시 2분부터 5분 간격으로 자료를 수집합니다. (02·07·12·17분…)';if(state.loadFailed)note+=' 최신 기록 파일을 불러오지 못해 보관된 기록을 표시합니다.';$('notice-text').textContent=note;$('notice').className='notice '+(!capture&&!stale&&!failed?'good':'');}
-  function renderCards(){const last=latest();$('leaders').innerHTML=last.top2.map((t,i)=>`<article class="leader ${i===0?'first':''}" style="--color:${colorOf(t)}"><div class="leader-top"><span class="rank-badge"><b>${String(i+1).padStart(2,'0')}</b> RANK</span>${i===0?'<span class="mini-label">현재 선두</span>':''}</div><h2 class="artist" title="${escapeHTML(t.name)}"><i class="artist-dot"></i><span class="artist-name">${escapeHTML(t.name)}</span></h2><div class="count-row"><span class="vote-total"><strong class="vote-value">${fmt(t.votes)}</strong><span class="unit">표</span></span><span class="share-value">${displayShare(t,last)}<span>%</span></span></div><div class="leader-bottom"><span>전체 투표 중 점유율</span><b>${i===0?`2위와 ${fmt(t.votes-last.top2[1].votes)}표 차이`:`1위와 ${fmt(last.top2[0].votes-t.votes)}표 차이`}</b></div></article>`).join('');$('total-votes').textContent=fmt(last.totalVotes);$('sample-count').textContent=fmt(state.data.snapshots.length);const sum=last.top2.reduce((s,t)=>s+t.votes,0);$('top-share').textContent=(sum/last.totalVotes*100).toFixed(1)+'%';$('other-share').textContent=((last.totalVotes-sum)/last.totalVotes*100).toFixed(1)+'%';$('share-track').innerHTML=last.top2.map(t=>`<i style="width:${share(t,last)}%;background:${colorOf(t)}" title="${escapeHTML(t.name)} ${displayShare(t,last)}%"></i>`).join('')+`<i style="width:${100-sum/last.totalVotes*100}%;background:#3b4332" title="그 외"></i>`;}
+  function status(){
+    const last=latest(),capture=last.origin==='user_capture';
+    const stale=Date.now()-Date.parse(last.sourceAt)>10*60000;
+    const failed=state.data.collector?.state==='error',stopped=collectionStopped();
+    $('status-pill').className='status-pill '+(stopped||stale||failed?'stale':capture?'':'live');
+    $('status-label').textContent=stopped?'투표 종료':capture?'캡처 기록':failed?'수집 오류':stale?'갱신 지연':'최근 수집 확인';
+    $('source-time').textContent=kst(last.sourceAt);
+    $('collected-time').textContent=last.collectedAt?`수집 ${kst(last.collectedAt,'time')}`:'';
+    document.querySelector('h1').textContent=stopped?'투표 종료, 기록은 그대로.':'지금, 선두의 흐름.';
+    document.querySelector('.source-link').innerHTML=(stopped?'공식 투표 페이지':'공식 투표 바로가기')+' <span aria-hidden="true">↗</span>';
+    $('leaders').setAttribute('aria-label',stopped?'마지막 관측 상위 2팀':'현재 상위 2팀');
+    let note=stopped?`투표가 종료되었습니다. ${kst(new Date(operationEnd()).toISOString())}(KST)에 수집과 자동 갱신을 종료하며, 저장된 기록과 차트는 계속 열람할 수 있습니다. 표시된 수치는 마지막 관측값입니다.`:capture?'첨부 화면의 실제 수치 1건입니다. 자동 수집 연결 전이며, 기록이 더 쌓이면 추이선이 표시됩니다.':failed?'최근 수집에 실패했습니다. 마지막으로 확인한 기록을 표시하며, 누락된 값은 채우지 않습니다.':stale?'원본 집계 시각이 10분 이상 지났습니다. 아래 집계 시각의 수치를 표시합니다.':'매시 2분부터 5분 간격으로 자료를 수집합니다. (02·07·12·17분…)';
+    if(state.loadFailed)note+=' 기록 파일을 불러오지 못해 보관된 사본을 표시합니다.';
+    $('notice-text').textContent=note;$('notice').className='notice '+(stopped||(!capture&&!stale&&!failed)?'good':'');
+  }
+  function renderCards(){const last=latest();$('leaders').innerHTML=last.top2.map((t,i)=>`<article class="leader ${i===0?'first':''}" style="--color:${colorOf(t)}"><div class="leader-top"><span class="rank-badge"><b>${String(i+1).padStart(2,'0')}</b> RANK</span>${i===0?`<span class="mini-label">${collectionStopped()?'마지막 기록 선두':'현재 선두'}</span>`:''}</div><h2 class="artist" title="${escapeHTML(t.name)}"><i class="artist-dot"></i><span class="artist-name">${escapeHTML(t.name)}</span></h2><div class="count-row"><span class="vote-total"><strong class="vote-value">${fmt(t.votes)}</strong><span class="unit">표</span></span><span class="share-value">${displayShare(t,last)}<span>%</span></span></div><div class="leader-bottom"><span>전체 투표 중 점유율</span><b>${i===0?`2위와 ${fmt(t.votes-last.top2[1].votes)}표 차이`:`1위와 ${fmt(last.top2[0].votes-t.votes)}표 차이`}</b></div></article>`).join('');$('total-votes').textContent=fmt(last.totalVotes);$('sample-count').textContent=fmt(state.data.snapshots.length);const sum=last.top2.reduce((s,t)=>s+t.votes,0);$('top-share').textContent=(sum/last.totalVotes*100).toFixed(1)+'%';$('other-share').textContent=((last.totalVotes-sum)/last.totalVotes*100).toFixed(1)+'%';$('share-track').innerHTML=last.top2.map(t=>`<i style="width:${share(t,last)}%;background:${colorOf(t)}" title="${escapeHTML(t.name)} ${displayShare(t,last)}%"></i>`).join('')+`<i style="width:${100-sum/last.totalVotes*100}%;background:#3b4332" title="그 외"></i>`;}
   function renderPace(){const last=latest(),prev=previousObservation();$('pace-tag').textContent=prev?`${fmt((Date.parse(last.sourceAt)-Date.parse(prev.sourceAt))/60000)}분 간격`:'기록 대기';$('pace-body').innerHTML=last.top2.map(t=>{const p=prev?.top2.find(x=>x.id===t.id);const delta=p?t.votes-p.votes:null,pp=p?share(t,last)-share(p,prev):null;return `<tr><td><span class="table-artist" style="--color:${colorOf(t)}"><i></i>${escapeHTML(t.name)}</span></td><td class="${delta==null?'no-value':delta>=0?'positive':'negative'}">${delta==null?'—':change(delta)+'표'}</td><td class="${pp==null?'no-value':pp>=0?'positive':'negative'}">${pp==null?'—':change(pp,2)+'%p'}</td></tr>`;}).join('');$('pace-note').textContent=prev?`${kst(prev.sourceAt,'short')} → ${kst(last.sourceAt,'short')} · 직전 관측 대비 변화입니다. 직전 관측에서 상위 2위 밖인 팀은 비교 값이 없습니다.`:'관측 기록이 두 개 이상이면 직전 관측 대비 변화를 표시합니다. 아직 없는 값은 —로 표시합니다.';}
   function renderHistory(){const all=[...state.data.snapshots].reverse();$('history-count').textContent=`${fmt(all.length)}회 관측`;$('history-body').innerHTML=all.slice(0,state.historyLimit).map(s=>`<tr><td>${kst(s.sourceAt,'short')}${s.origin==='user_capture'?' · 캡처':''}</td>${s.top2.map(t=>`<td><span class="history-name">${escapeHTML(t.name)}</span>${fmt(t.votes)}<span class="history-name" style="display:inline;margin-left:7px">${displayShare(t,s)}%</span></td>`).join('')}<td>${fmt(s.top2[0].votes-s.top2[1].votes)}표</td></tr>`).join('');$('load-more').hidden=all.length<=state.historyLimit;}
   function renderHourly(){
@@ -159,12 +176,12 @@
     }finally{state.fetching=false;$('refresh-button').disabled=false;}
   }
   async function autoRefresh(){
-    if(Date.now()>=operationEnd()||state.data.collector?.state==='stopped'){status();return;}
+    if(collectionStopped()){render();return;}
     if(!document.hidden)await refresh();
     scheduleRefresh();
   }
   function scheduleRefresh(){
-    if(Date.now()>=operationEnd()||state.data.collector?.state==='stopped')return;
+    if(collectionStopped())return;
     const now=Date.now(),windowStart=Math.floor((now-refreshOffset)/refreshEvery)*refreshEvery;
     const waiting=Date.parse(latest().sourceAt)<windowStart||state.loadFailed;
     const retryUntil=windowStart+270000;
@@ -228,6 +245,6 @@
   document.querySelectorAll('[data-range]').forEach(button=>button.addEventListener('click',()=>{state.range=button.dataset.range;document.querySelectorAll('[data-range]').forEach(b=>{b.classList.toggle('selected',b===button);b.setAttribute('aria-pressed',String(b===button));});hideTooltip();renderChart();}));
   $('hourly-date').addEventListener('change',event=>{state.hourlyDate=event.target.value;state.hourlyLimit=6;renderHourly();});
   $('hourly-more').addEventListener('click',()=>{state.hourlyLimit=24;renderHourly();});
-  $('refresh-button').addEventListener('click',()=>refresh(true));$('csv-button').addEventListener('click',exportCSV);$('copy-button').addEventListener('click',copySummary);$('load-more').addEventListener('click',()=>{state.historyLimit+=12;renderHistory();});$('history-details').addEventListener('toggle',()=>{$('history-toggle-label').textContent=$('history-details').open?'접기':'펼치기';});let resizeTimer;addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(renderChart,120);});document.addEventListener('visibilitychange',()=>{if(!document.hidden&&Date.now()-state.lastCheckedAt>=retryEvery&&Date.now()<operationEnd()&&state.data.collector?.state!=='stopped')refresh();});
+  $('refresh-button').addEventListener('click',()=>refresh(true));$('csv-button').addEventListener('click',exportCSV);$('copy-button').addEventListener('click',copySummary);$('load-more').addEventListener('click',()=>{state.historyLimit+=12;renderHistory();});$('history-details').addEventListener('toggle',()=>{$('history-toggle-label').textContent=$('history-details').open?'접기':'펼치기';});let resizeTimer;addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(renderChart,120);});document.addEventListener('visibilitychange',()=>{if(!document.hidden){if(collectionStopped())render();else if(Date.now()-state.lastCheckedAt>=retryEvery)refresh();}});
   state.data=normalize(state.data);render();if(location.protocol!=='file:'){refresh();scheduleRefresh();}
 })();

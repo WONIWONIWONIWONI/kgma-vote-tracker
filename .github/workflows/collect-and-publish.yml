@@ -41,7 +41,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
       - name: Read the public API on each update and retry briefly while waiting
         run: python -u collector/runner.py --minutes 330
-      - name: Disable future schedules after the two-week window
+      - name: Publish the final archive and disable future collection after voting closes
         if: always() && !cancelled()
         env:
           GH_TOKEN: ${{ github.token }}

@@ -42,6 +42,9 @@ try:
                                           is_mobile=width<=430, device_scale_factor=1)
             context.route('https://raw.githubusercontent.com/**', lambda route: route.fulfill(
                 content_type='application/json', body=json.dumps(data)))
+            # Keep the seed and feed on the same fixture timeline as real records grow.
+            context.route('**/data/seed.js', lambda route: route.fulfill(
+                content_type='text/javascript', body='window.KGMA_SEED = '+json.dumps({**data, 'snapshots': data['snapshots'][-3:]})+';'))
             context.grant_permissions(['clipboard-read','clipboard-write'])
             page = context.new_page()
             page.add_init_script("""window.pngText=[];window.pngOverflow=[];
@@ -225,6 +228,57 @@ try:
                 assert not page.evaluate('window.pngOverflow')
             assert not errors, errors
             context.close()
+        # Advance an already-open tab over midnight with outdated operation metadata
+        # and a previous collector error. Both dashboards must stop polling, show
+        # voting as closed, and retain the complete read-only archive.
+        closed_data = copy.deepcopy(data)
+        closed_data['operation']['endsAt'] = '2026-10-20T15:45:00Z'
+        closed_data['collector']['state'] = 'error'
+        context = browser.new_context(viewport={'width':390, 'height':844}, is_mobile=True,
+                                      timezone_id='Asia/Seoul')
+        requests = []
+
+        def archived_feed(route):
+            requests.append(route.request.url)
+            route.fulfill(content_type='application/json', body=json.dumps(closed_data))
+
+        context.route('https://raw.githubusercontent.com/**', archived_feed)
+        context.route('**/data/seed.js', lambda route: route.fulfill(
+            content_type='text/javascript', body='window.KGMA_SEED = '+json.dumps({**closed_data, 'snapshots': closed_data['snapshots'][-3:]})+';'))
+        page = context.new_page()
+        before = datetime(2026, 10, 19, 14, 59, 59, tzinfo=timezone.utc)
+        page.clock.install(time=before)
+        page.clock.pause_at(before)
+        page.goto(f'http://127.0.0.1:{server.server_port}/', wait_until='networkidle')
+        assert page.locator('#status-label').inner_text() == '수집 오류'
+        assert page.locator('#sample-count').inner_text() == '160'
+        assert page.locator('#cd-svg path').count() or page.locator('#cd-svg rect').count()
+        count = len(requests)
+        page.clock.fast_forward(1000)
+        assert page.locator('#status-label').inner_text() == '투표 종료'
+        assert '계속 열람' in page.locator('#notice-text').inner_text()
+        assert '마지막 관측값' in page.locator('#notice-text').inner_text()
+        assert page.locator('.mini-label').inner_text() == '마지막 기록 선두'
+        page.clock.fast_forward(15 * 60 * 1000)
+        page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+        page.wait_for_timeout(50)
+        assert len(requests) == count, requests
+        page.locator('[data-metric=gap]').click()
+        assert page.locator('#trend-chart path').count() == 1
+        page.locator('#history-details summary').click()
+        with page.expect_download() as download:
+            page.locator('#csv-button').click()
+        csv = Path(download.value.path()).read_text(encoding='utf-8-sig')
+        assert len(csv.splitlines()) == 1 + 2 * len(closed_data['snapshots'])
+        # Opening the archived site later still loads the full saved history once.
+        page.reload(wait_until='networkidle')
+        assert page.locator('#status-label').inner_text() == '투표 종료'
+        assert page.locator('#sample-count').inner_text() == '160'
+        count = len(requests)
+        page.clock.fast_forward(15 * 60 * 1000)
+        assert len(requests) == count, requests
+        print('Midnight closure, no automatic requests, archive reload and full CSV verified.', flush=True)
+        context.close()
         browser.close()
 finally:
     server.shutdown()

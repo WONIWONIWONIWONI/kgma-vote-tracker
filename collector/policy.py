@@ -1,9 +1,9 @@
-"""Bound this public, free-runner tracker to its two-week operating window."""
+"""Stop this tracker when voting closes, retaining all observed records."""
 from datetime import datetime, timezone
 import os
 
 START_AT = '2026-10-06T15:45:00Z'
-END_AT = '2026-10-20T15:45:00Z'
+END_AT = '2026-10-19T15:00:00Z'  # 2026-10-19 24:00 / 2026-10-20 00:00 KST
 MAX_RECORDS = 4100
 MAX_HISTORY_BYTES = 8 * 1024 * 1024
 
