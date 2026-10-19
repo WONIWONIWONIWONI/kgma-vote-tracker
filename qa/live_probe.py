@@ -1,73 +1,119 @@
-"""Verify the deployed mobile dashboard against the public record feed."""
-from datetime import datetime
+"""Verify the closed public archive without requesting the Berriz source."""
+from datetime import datetime, timezone
 import json
-from pathlib import Path
-import sys
-from urllib.parse import urlsplit
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'collector'))
-from collect import KST, load_public_snapshot, utc_now
+import time
+from urllib.request import Request, urlopen
 from playwright.sync_api import sync_playwright
 
 SITE = 'https://woniwoniwoniwoni.github.io/kgma-vote-tracker/'
+RAW = 'https://raw.githubusercontent.com/WONIWONIWONIWONI/kgma-vote-tracker/main/dist/data/'
+API = 'https://api.github.com/repos/WONIWONIWONIWONI/kgma-vote-tracker/'
+END = datetime(2026, 10, 19, 15, 0, tzinfo=timezone.utc)
+deadline = time.monotonic() + 300
 
 
-def emit(label, value):
-    print(label + ' ' + json.dumps(value, ensure_ascii=False), flush=True)
+def read_json(url):
+    sep = '&' if '?' in url else '?'
+    request = Request(url + sep + 'archive_check=' + str(time.time_ns()),
+                      headers={'Accept': 'application/json', 'Cache-Control': 'no-cache'})
+    with urlopen(request, timeout=15) as response:
+        return json.load(response)
 
 
-source = load_public_snapshot()
-emit('PUBLIC_SOURCE', {'now': utc_now(), 'sourceAt': source['sourceAt'],
-                       'totalVotes': source['totalVotes']})
+def stamp(value):
+    return datetime.fromisoformat(value.replace('Z', '+00:00'))
+
+
+def wait_for(check, label):
+    while True:
+        try:
+            value = check()
+            if value:
+                return value
+        except Exception as exc:
+            print(label + ': ' + str(exc)[:180], flush=True)
+        if time.monotonic() >= deadline:
+            raise AssertionError(label + ' did not complete before the verification deadline')
+        time.sleep(10)
+
+
+# Retain a baseline of every record available when this check starts.
+baseline = read_json(RAW + 'history.json')
+while datetime.now(timezone.utc) < END:
+    remaining = (END - datetime.now(timezone.utc)).total_seconds()
+    print('Waiting for the configured voting cutoff; collection remains enabled.', flush=True)
+    time.sleep(min(15, max(0, remaining)))
+
+
+def stopped_history():
+    data = read_json(RAW + 'history.json')
+    return data if data.get('collector', {}).get('state') == 'stopped' else None
+
+
+data = wait_for(stopped_history, 'Final collector status')
+assert stamp(data['operation']['endsAt']) == END
+rows = data['snapshots']
+assert data['historyCount'] == len(rows) >= 3718
+assert rows[:len(baseline['snapshots'])] == baseline['snapshots'], 'Existing observations changed'
+assert all(stamp(row['sourceAt']) < END for row in rows)
+assert all(not row.get('collectedAt') or stamp(row['collectedAt']) < END for row in rows)
+assert len({row['sourceAt'] for row in rows}) == len(rows)
+recent = read_json(RAW + 'latest.json')
+assert recent['collector']['state'] == 'stopped'
+assert recent['historyCount'] == len(rows)
+assert recent['snapshots'] == rows[-3:]
+
+
+def collector_disabled():
+    workflow = read_json(API + 'actions/workflows/collect-and-publish.yml')
+    return workflow if workflow['state'].startswith('disabled') else None
+
+
+workflow = wait_for(collector_disabled, 'Collector workflow disable')
+
+
+def deployed_archive():
+    archived = read_json(SITE + 'data/history.json')
+    if archived.get('collector', {}).get('state') != 'stopped':
+        return None
+    assert archived['snapshots'] == rows, 'Deployed archive differs from preserved records'
+    return archived
+
+
+wait_for(deployed_archive, 'Final Pages archive')
 with sync_playwright() as p:
     browser = p.chromium.launch()
-    context = browser.new_context(viewport={'width':390, 'height':844}, is_mobile=True,
-                                  locale='ko-KR', timezone_id='Asia/Seoul')
+    context = browser.new_context(viewport={'width': 390, 'height': 844},
+                                  is_mobile=True, locale='ko-KR', timezone_id='Asia/Seoul')
+    # Links may point at the official page, but the archive check never opens it.
+    context.route('**/*berriz.in/**', lambda route: route.abort())
     page = context.new_page()
-    errors, records = [], []
+    errors, feed_requests = [], []
     page.on('pageerror', lambda error: errors.append(str(error)))
-    page.on('response', lambda response: records.append(response)
-            if urlsplit(response.url).netloc == 'raw.githubusercontent.com' else None)
-    page.goto(SITE, wait_until='networkidle')
-    page.wait_for_function("document.querySelector('#history-details')!==null")
-    assert records and records[-1].ok, 'Initial public record fetch failed'
-    with page.expect_response(lambda response: 'raw.githubusercontent.com' in response.url
-                              and '/latest.json?' in response.url) as refreshed:
-        page.locator('#refresh-button').click()
-    response = refreshed.value
-    assert response.ok, response.status
-    assert 'v=' in urlsplit(response.url).query, 'Fresh record URL required'
-    recent = response.json()
-    assert recent['schemaVersion'] == 2
-    assert all('top3' not in row and len(row['top2']) == 2 for row in recent['snapshots'])
-    latest = recent['snapshots'][-1]
-    expected = datetime.fromisoformat(latest['sourceAt'].replace('Z', '+00:00'))
-    expected_text = expected.astimezone(KST).strftime('%Y.%m.%d %H:%M')
-    page.wait_for_function("expected => document.querySelector('#source-time').textContent === expected", arg=expected_text)
-    metrics = page.evaluate("""() => ({
-      source:document.querySelector('#source-time').textContent,
-      collected:document.querySelector('#collected-time').textContent,
-      viewport:innerWidth, body:document.documentElement.scrollWidth,
-      historyClosed:!document.querySelector('#history-details').open,
-      notice:document.querySelector('#notice-text').textContent,
-      hourly:[...document.querySelectorAll('.hourly-row')].map(el=>el.innerText),
-      cards:[...document.querySelectorAll('.leader')].map(el=>({
-        width:el.getBoundingClientRect().width,height:el.getBoundingClientRect().height}))
-    })""")
-    collected = datetime.fromisoformat(latest['collectedAt'].replace('Z', '+00:00'))
-    emit('LIVE_DASHBOARD', {**metrics, 'now':utc_now(), 'errors':errors,
-                          'sourceToCollectionSeconds':(collected-expected).total_seconds()})
+    page.on('request', lambda request: feed_requests.append(request.url)
+            if 'raw.githubusercontent.com' in request.url else None)
+    page.goto(SITE + '?archive_check=' + str(time.time_ns()), wait_until='networkidle')
+    page.wait_for_function("document.querySelector('#status-label').textContent === '투표 종료'")
+    page.wait_for_function("expected => document.querySelector('#sample-count').textContent.replaceAll(',','') === String(expected)",
+                           arg=len(rows))
+    assert '마지막 관측값' in page.locator('#notice-text').inner_text()
+    assert page.locator('#trend-chart path').count() >= 1
+    assert page.locator('#cd-svg rect').count() >= 1
+    page.locator('#history-details summary').click()
+    assert page.locator('#history-body tr').count() >= 1
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    # Advance timers using real deployed scripts; neither chart may poll after closing.
+    count = len(feed_requests)
+    page.clock.install()
+    page.clock.fast_forward(16 * 60 * 1000)
+    page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+    assert len(feed_requests) == count, 'Closed archive made automatic feed requests'
     assert not errors, errors
-    assert metrics['viewport'] == 390 and metrics['body'] == 390, metrics
-    assert metrics['historyClosed'], metrics
-    assert len(metrics['cards']) == 2 and metrics['hourly'], metrics
-    assert metrics['notice'].startswith('매시 2분부터 5분 간격으로 자료를 수집합니다.'), metrics
-    assert '3위' not in page.locator('body').inner_text()
-    assert len({(c['width'], c['height']) for c in metrics['cards']}) == 1, metrics
-    page.locator('.history-summary').click()
-    assert page.locator('#history-body').is_visible()
-    page.locator('.history-summary').click()
-    assert not page.locator('#history-body').is_visible()
-    emit('RESULT', 'PASS: top-two data, minute-two notice, hourly gains, mobile cards, collapsed history')
-    context.close()
     browser.close()
+
+print('ARCHIVE_VERIFIED ' + json.dumps({
+    'historyCount': len(rows), 'lastSourceAt': rows[-1]['sourceAt'],
+    'lastCollectedAt': rows[-1].get('collectedAt'), 'workflowState': workflow['state'],
+    'site': SITE, 'state': data['collector']['state'],
+    'allBaselineObservationsPreserved': True, 'liveMobileChartsAndHistory': True,
+    'automaticRequestsAfterClose': 0}, ensure_ascii=False), flush=True)
